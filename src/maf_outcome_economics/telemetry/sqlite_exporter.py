@@ -57,9 +57,10 @@ class SQLiteSpanExporter(SpanExporter):
             """INSERT OR IGNORE INTO telemetry_spans
             (id, run_id, trace_id, span_id, parent_span_id, name, started_at,
             ended_at, status_code, status_description, attributes_json)
-            VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            VALUES (?, (SELECT id FROM runs WHERE trace_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 f"{span.trace_id}:{span.span_id}",
+                span.trace_id,
                 span.trace_id,
                 span.span_id,
                 span.parent_span_id,
@@ -83,9 +84,11 @@ class SQLiteSpanExporter(SpanExporter):
             response_model, operation_name, agent_id, agent_name, workflow_id,
             session_id, executor_id, message_source, message_target, error_type,
             input_tokens, output_tokens, recorded_at)
-            VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            VALUES (?, (SELECT id FROM runs WHERE trace_id = ?),
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 f"{span.trace_id}:{span.span_id}",
+                span.trace_id,
                 span.trace_id,
                 span.span_id,
                 span.provider_name or "unknown",

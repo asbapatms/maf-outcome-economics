@@ -26,6 +26,13 @@ class Variant(StrEnum):
     TREATMENT = "treatment"
 
 
+class WorkflowVariant(StrEnum):
+    """Ticket workflow strategy used for agent invocation."""
+
+    BASELINE = "baseline"
+    OPTIMIZED = "optimized"
+
+
 class OutcomeStatus(StrEnum):
     """Lifecycle state of an outcome contract."""
 
@@ -109,6 +116,46 @@ class VerificationResult(DomainModel):
     evidence_count: int = Field(ge=0)
     reason: str = Field(min_length=1)
     verified_at: AwareDatetime = Field(default_factory=utc_now)
+
+
+class TicketWorkflowInput(DomainModel):
+    """Business metadata and ticket supplied to one workflow run."""
+
+    ticket: Ticket
+    business_task_id: str = Field(min_length=1)
+    batch_id: str = Field(min_length=1)
+    contract_id: str = Field(min_length=1)
+    variant: WorkflowVariant
+    sensitive: bool = False
+
+
+class TicketWorkflowState(DomainModel):
+    """Typed message passed between sequential ticket executors."""
+
+    request: TicketWorkflowInput
+    run_id: str = Field(min_length=1)
+    trace_id: str = Field(min_length=32, max_length=32)
+    triage: TriageResult | None = None
+    review: ReviewResult | None = None
+    review_invoked: bool = False
+    review_skip_reason: str | None = None
+    verification: VerificationResult | None = None
+
+
+class TicketWorkflowResult(DomainModel):
+    """Final typed output from one ticket workflow run."""
+
+    business_task_id: str = Field(min_length=1)
+    batch_id: str = Field(min_length=1)
+    contract_id: str = Field(min_length=1)
+    variant: WorkflowVariant
+    run_id: str = Field(min_length=1)
+    trace_id: str = Field(min_length=32, max_length=32)
+    triage: TriageResult
+    review: ReviewResult | None = None
+    review_invoked: bool
+    review_skip_reason: str | None = None
+    verification: VerificationResult
 
 
 class PricingRecord(DomainModel):

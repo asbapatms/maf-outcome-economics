@@ -6,6 +6,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import Status, StatusCode
 
+from maf_outcome_economics.domain import Ticket, WorkflowVariant
 from maf_outcome_economics.persistence import OutcomeRepository
 from maf_outcome_economics.telemetry import MAFSpanNormalizer, SQLiteSpanExporter
 from maf_outcome_economics.telemetry import setup as telemetry_setup
@@ -103,6 +104,55 @@ def test_non_chat_span_is_not_billable(tmp_path) -> None:
     exporter = SQLiteSpanExporter(tmp_path / "telemetry.db")
     assert exporter.export(memory_exporter.get_finished_spans()) is SpanExportResult.SUCCESS
     assert OutcomeRepository(tmp_path / "telemetry.db").list_billable_model_usage() == []
+
+
+def test_exporter_associates_ticket_trace_spans_and_usage_with_persisted_run(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "telemetry.db"
+    repository = OutcomeRepository(database_path)
+    repository.save_ticket(
+        Ticket(
+            id="TKT-TRACE",
+            subject="Fictional trace correlation",
+            description="Verify model spans are associated with their run.",
+            gold_category="Application",
+            gold_priority="P3",
+            gold_resolver_group="Business Applications",
+        )
+    )
+    provider = TracerProvider()
+    memory_exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(memory_exporter))
+    tracer = provider.get_tracer("telemetry-tests")
+    with tracer.start_as_current_span("tokenomics.ticket") as parent:
+        trace_id = format(parent.get_span_context().trace_id, "032x")
+        repository.create_run(
+            "run-trace",
+            "TKT-TRACE",
+            WorkflowVariant.BASELINE,
+            trace_id=trace_id,
+        )
+        with tracer.start_as_current_span(
+            "chat model call",
+            attributes={
+                "gen_ai.operation.name": "chat",
+                "gen_ai.request.model": "requested-model",
+                "gen_ai.usage.input_tokens": 10,
+                "gen_ai.usage.output_tokens": 5,
+            },
+        ):
+            pass
+    provider.shutdown()
+
+    exporter = SQLiteSpanExporter(database_path)
+    assert exporter.export(memory_exporter.get_finished_spans()) is SpanExportResult.SUCCESS
+
+    spans = repository.list_telemetry_spans("run-trace")
+    usage = repository.list_model_usage("run-trace")
+    assert {span["name"] for span in spans} == {"tokenomics.ticket", "chat model call"}
+    assert len(usage) == 1
+    assert usage[0]["trace_id"] == trace_id
 
 
 def test_configure_telemetry_disables_sensitive_capture(

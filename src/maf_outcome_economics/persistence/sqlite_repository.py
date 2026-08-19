@@ -18,6 +18,7 @@ from maf_outcome_economics.domain import (
     TriageResult,
     Variant,
     VerificationResult,
+    WorkflowVariant,
 )
 
 
@@ -37,6 +38,7 @@ class OutcomeRepository:
         schema = Path(__file__).with_name("schema.sql").read_text(encoding="utf-8")
         with self._connect() as connection:
             connection.executescript(schema)
+            self._migrate_runs_table(connection)
             self._migrate_telemetry_tables(connection)
 
     @contextmanager
@@ -117,23 +119,30 @@ class OutcomeRepository:
         self,
         run_id: str,
         ticket_id: str,
-        variant: Variant,
+        variant: Variant | WorkflowVariant,
         started_at: datetime | None = None,
+        trace_id: str | None = None,
     ) -> None:
         """Create a pending experiment run for a ticket."""
         self.initialize()
         with self._connect() as connection:
             connection.execute(
-                """INSERT INTO runs (id, ticket_id, variant, status, started_at)
-                VALUES (?, ?, ?, 'running', ?)""",
-                (run_id, ticket_id, variant.value, (started_at or _utc_now()).isoformat()),
+                """INSERT INTO runs (id, ticket_id, variant, trace_id, status, started_at)
+                VALUES (?, ?, ?, ?, 'running', ?)""",
+                (
+                    run_id,
+                    ticket_id,
+                    variant.value,
+                    trace_id,
+                    (started_at or _utc_now()).isoformat(),
+                ),
             )
 
     def complete_run(
         self,
         run_id: str,
         triage: TriageResult,
-        review: ReviewResult,
+        review: ReviewResult | None,
         completed_at: datetime | None = None,
     ) -> None:
         """Complete a run with its triage and review results."""
@@ -145,7 +154,7 @@ class OutcomeRepository:
                 (
                     (completed_at or _utc_now()).isoformat(),
                     triage.model_dump_json(),
-                    review.model_dump_json(),
+                    review.model_dump_json() if review else None,
                     run_id,
                 ),
             )
@@ -158,7 +167,11 @@ class OutcomeRepository:
         if row is None:
             return None
         result = dict(row)
-        result["variant"] = Variant(result["variant"])
+        variant = result["variant"]
+        try:
+            result["variant"] = WorkflowVariant(variant)
+        except ValueError:
+            result["variant"] = Variant(variant)
         result["triage"] = (
             TriageResult.model_validate_json(result.pop("triage_payload"))
             if result["triage_payload"]
@@ -170,6 +183,18 @@ class OutcomeRepository:
             else None
         )
         return result
+
+    @staticmethod
+    def _migrate_runs_table(connection: sqlite3.Connection) -> None:
+        columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(runs)").fetchall()
+        }
+        if "trace_id" not in columns:
+            connection.execute("ALTER TABLE runs ADD COLUMN trace_id TEXT")
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_runs_trace_id ON runs(trace_id)"
+        )
 
     def save_telemetry_span(
         self,

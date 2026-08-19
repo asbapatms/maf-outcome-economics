@@ -127,6 +127,30 @@ The command prints the validated response JSON, its trace ID, and input and
 output token counts captured from billable MAF chat spans in SQLite. It uses
 real Azure OpenAI execution and can incur model usage charges.
 
+## Sequential Ticket Workflow
+
+`create_ticket_workflow()` builds a sequential Microsoft Agent Framework
+workflow from installed `Executor`, `WorkflowBuilder`, `WorkflowContext`, and
+`handler` APIs. Each ticket moves through these executors in order:
+
+1. `TicketInputExecutor` creates the run with its active trace ID.
+2. `TriageAgentExecutor` invokes the triage agent.
+3. `ReviewAgentExecutor` invokes or deterministically skips review.
+4. `OutcomeVerifierExecutor` compares effective labels with fictional gold
+	labels.
+5. `ResultExecutor` completes persistence and yields `TicketWorkflowResult`.
+
+Baseline runs invoke both agents for every ticket. Optimized runs invoke review
+when triage confidence is below `0.8`, the request or ticket text is sensitive,
+the priority is `P1`, or the category contains `Critical`. Other optimized
+tickets continue through the sequential executor without a review model call.
+
+`stream_ticket_workflow()` yields Agent Framework workflow events and produces
+one typed final result. It keeps a parent `tokenomics.ticket` span active while
+events stream and records `business_task_id`, `batch_id`, `contract_id`, and
+`variant` attributes. The run stores the same 32-character trace ID so SQLite
+spans and billable model usage can be associated with the business result.
+
 ## Telemetry
 
 `configure_telemetry()` passes `SQLiteSpanExporter` to Agent Framework's
