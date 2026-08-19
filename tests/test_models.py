@@ -58,6 +58,10 @@ def test_requested_models_accept_valid_records() -> None:
         target_value=Decimal("0.90"),
         unit="ratio",
         measurement_window_days=30,
+        minimum_acceptance_rate=Decimal("0.90"),
+        minimum_quality_score=Decimal("0.90"),
+        minimum_critical_priority_recall=Decimal("1"),
+        maximum_cost_per_accepted_outcome=Decimal("1"),
         created_at=timestamp,
     )
     verification = VerificationResult(

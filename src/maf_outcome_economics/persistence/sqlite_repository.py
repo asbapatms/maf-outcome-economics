@@ -123,16 +123,19 @@ class OutcomeRepository:
         variant: Variant | WorkflowVariant,
         started_at: datetime | None = None,
         trace_id: str | None = None,
+        business_task_id: str | None = None,
     ) -> None:
         """Create a pending experiment run for a ticket."""
         self.initialize()
         with self._connect() as connection:
             connection.execute(
-                """INSERT INTO runs (id, ticket_id, variant, trace_id, status, started_at)
-                VALUES (?, ?, ?, ?, 'running', ?)""",
+                """INSERT INTO runs
+                (id, ticket_id, business_task_id, variant, trace_id, status, started_at)
+                VALUES (?, ?, ?, ?, ?, 'running', ?)""",
                 (
                     run_id,
                     ticket_id,
+                    business_task_id,
                     variant.value,
                     trace_id,
                     (started_at or _utc_now()).isoformat(),
@@ -185,6 +188,17 @@ class OutcomeRepository:
         )
         return result
 
+    def list_runs(self, variant: WorkflowVariant | None = None) -> list[dict[str, Any]]:
+        """List runs, optionally filtered by workflow variant."""
+        if variant is None:
+            rows = self._fetch_all("SELECT * FROM runs ORDER BY started_at")
+        else:
+            rows = self._fetch_all(
+                "SELECT * FROM runs WHERE variant = ? ORDER BY started_at",
+                (variant.value,),
+            )
+        return [dict(row) for row in rows]
+
     @staticmethod
     def _migrate_runs_table(connection: sqlite3.Connection) -> None:
         columns = {
@@ -193,8 +207,14 @@ class OutcomeRepository:
         }
         if "trace_id" not in columns:
             connection.execute("ALTER TABLE runs ADD COLUMN trace_id TEXT")
+        if "business_task_id" not in columns:
+            connection.execute("ALTER TABLE runs ADD COLUMN business_task_id TEXT")
         connection.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_runs_trace_id ON runs(trace_id)"
+        )
+        connection.execute(
+            """CREATE INDEX IF NOT EXISTS idx_runs_business_task_id
+            ON runs(business_task_id)"""
         )
 
     def save_telemetry_span(
@@ -301,9 +321,91 @@ class OutcomeRepository:
     def list_billable_model_usage(self) -> list[dict[str, Any]]:
         """List deduplicated chat model-call usage records."""
         rows = self._fetch_all(
-            "SELECT * FROM model_usage WHERE operation_name = 'chat' ORDER BY recorded_at"
+            """SELECT model_usage.*, runs.business_task_id
+            FROM model_usage LEFT JOIN runs ON runs.id = model_usage.run_id
+            WHERE operation_name = 'chat' ORDER BY recorded_at"""
         )
         return [dict(row) for row in rows]
+
+    def list_billable_model_usage_for_variant(
+        self, variant: WorkflowVariant
+    ) -> list[dict[str, Any]]:
+        """List normalized chat calls associated with one workflow variant."""
+        rows = self._fetch_all(
+            """SELECT model_usage.*, runs.business_task_id
+            FROM model_usage JOIN runs ON runs.id = model_usage.run_id
+            WHERE model_usage.operation_name = 'chat' AND runs.variant = ?
+            ORDER BY model_usage.recorded_at""",
+            (variant.value,),
+        )
+        return [dict(row) for row in rows]
+
+    def assign_model_usage_to_run(self, usage_ids: list[str], run_id: str) -> None:
+        """Associate newly captured live model calls with a sequential CLI run."""
+        if not usage_ids:
+            return
+        self.initialize()
+        placeholders = ", ".join("?" for _ in usage_ids)
+        with self._connect() as connection:
+            connection.execute(
+                f"UPDATE model_usage SET run_id = ? WHERE id IN ({placeholders})",
+                (run_id, *usage_ids),
+            )
+
+    def save_rehearsal_model_call(
+        self,
+        *,
+        usage_id: str,
+        run_id: str,
+        provider: str,
+        model: str,
+        agent_id: str,
+        agent_name: str,
+        input_tokens: int,
+        output_tokens: int,
+        recorded_at: datetime | None = None,
+    ) -> None:
+        """Persist an explicitly synthetic chat call for fake-provider rehearsals."""
+        self.initialize()
+        timestamp = (recorded_at or _utc_now()).isoformat()
+        with self._connect() as connection:
+            connection.execute(
+                """INSERT OR REPLACE INTO model_usage
+                (id, run_id, trace_id, span_id, provider, model, request_model,
+                response_model, operation_name, agent_id, agent_name, input_tokens,
+                output_tokens, recorded_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'chat', ?, ?, ?, ?, ?)""",
+                (
+                    usage_id,
+                    run_id,
+                    f"rehearsal:{run_id}",
+                    usage_id,
+                    provider,
+                    model,
+                    model,
+                    model,
+                    agent_id,
+                    agent_name,
+                    input_tokens,
+                    output_tokens,
+                    timestamp,
+                ),
+            )
+
+    def list_routing_verifications(
+        self, variant: WorkflowVariant
+    ) -> list[RoutingVerificationResult]:
+        """List typed routing verifications for one workflow variant."""
+        rows = self._fetch_all(
+            """SELECT verifications.payload FROM verifications
+            JOIN runs ON runs.id = verifications.run_id
+            WHERE runs.variant = ? ORDER BY verifications.id""",
+            (variant.value,),
+        )
+        return [
+            RoutingVerificationResult.model_validate_json(row["payload"])
+            for row in rows
+        ]
 
     def save_pricing(self, pricing: PricingRecord) -> None:
         """Insert or replace illustrative model pricing."""

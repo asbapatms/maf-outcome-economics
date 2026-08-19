@@ -1,5 +1,6 @@
 """Tests for SQLite persistence."""
 
+import sqlite3
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -53,6 +54,34 @@ def test_initialize_creates_requested_tables(tmp_path) -> None:
     } <= repository.table_names()
 
 
+def test_given_legacy_runs_table_when_initialized_then_business_task_column_is_added(
+    tmp_path,
+) -> None:
+    # Arrange
+    database_path = tmp_path / "legacy.db"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """CREATE TABLE runs (
+            id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL, variant TEXT NOT NULL,
+            trace_id TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL,
+            completed_at TEXT, triage_payload TEXT, review_payload TEXT)"""
+        )
+
+    # Act
+    OutcomeRepository(database_path).initialize()
+
+    # Assert
+    with sqlite3.connect(database_path) as connection:
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(runs)").fetchall()
+        }
+        indexes = {
+            row[1] for row in connection.execute("PRAGMA index_list(runs)").fetchall()
+        }
+    assert "business_task_id" in columns
+    assert "idx_runs_business_task_id" in indexes
+
+
 def test_seed_inserts_twenty_fictional_labeled_tickets_idempotently(tmp_path) -> None:
     repository = OutcomeRepository(tmp_path / "outcomes.db")
 
@@ -78,6 +107,10 @@ def test_contract_pricing_verification_and_governance_round_trip(tmp_path) -> No
         target_value=Decimal("0.90"),
         unit="ratio",
         measurement_window_days=30,
+        minimum_acceptance_rate=Decimal("0.90"),
+        minimum_quality_score=Decimal("0.90"),
+        minimum_critical_priority_recall=Decimal("1"),
+        maximum_cost_per_accepted_outcome=Decimal("1"),
     )
     pricing = PricingRecord(
         id="PRICE-001",

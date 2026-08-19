@@ -1,6 +1,14 @@
 """Fictional seed data for local development and demonstrations."""
 
-from maf_outcome_economics.domain import Ticket
+from decimal import Decimal
+
+from maf_outcome_economics.domain import (
+    OutcomeContract,
+    OutcomeStatus,
+    Ticket,
+    Variant,
+    WorkflowVariant,
+)
 
 from .sqlite_repository import OutcomeRepository
 
@@ -168,8 +176,38 @@ FICTIONAL_TICKETS = [
 ]
 
 
+def contract_id_for_variant(variant: WorkflowVariant) -> str:
+    """Return the stable seeded contract identifier for a workflow variant."""
+    return f"contract-{variant.value}"
+
+
+def seeded_contract(variant: WorkflowVariant) -> OutcomeContract:
+    """Build the governance contract for a workflow variant."""
+    return OutcomeContract(
+        id=contract_id_for_variant(variant),
+        name=f"{variant.value.title()} routing outcome",
+        description="Govern quality, safety, and economics on fictional routing data.",
+        variant=(
+            Variant.CONTROL
+            if variant is WorkflowVariant.BASELINE
+            else Variant.TREATMENT
+        ),
+        status=OutcomeStatus.ACTIVE,
+        metric_name="routing_acceptance",
+        target_value=Decimal("0.80"),
+        unit="ratio",
+        measurement_window_days=7,
+        minimum_acceptance_rate=Decimal("0.80"),
+        minimum_quality_score=Decimal("0.90"),
+        minimum_critical_priority_recall=Decimal("1"),
+        maximum_cost_per_accepted_outcome=Decimal("0.05"),
+    )
+
+
 def seed_fictional_tickets(repository: OutcomeRepository) -> int:
     """Insert or replace the fictional support-ticket dataset."""
     for ticket in FICTIONAL_TICKETS:
         repository.save_ticket(ticket)
+    for variant in WorkflowVariant:
+        repository.save_outcome_contract(seeded_contract(variant))
     return len(FICTIONAL_TICKETS)

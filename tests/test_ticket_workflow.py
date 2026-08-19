@@ -73,6 +73,10 @@ def _repository(tmp_path) -> OutcomeRepository:
             target_value=Decimal("1"),
             unit="ratio",
             measurement_window_days=1,
+            minimum_acceptance_rate=Decimal("1"),
+            minimum_quality_score=Decimal("1"),
+            minimum_critical_priority_recall=Decimal("1"),
+            maximum_cost_per_accepted_outcome=Decimal("1"),
         )
     )
     return repository

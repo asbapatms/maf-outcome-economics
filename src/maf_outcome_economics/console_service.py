@@ -1,0 +1,236 @@
+"""Shared execution and reporting operations for the Typer console."""
+
+from dataclasses import dataclass
+from datetime import datetime
+from enum import StrEnum
+from typing import Any
+from uuid import uuid4
+
+from opentelemetry import trace
+
+from maf_outcome_economics.agents import (
+    create_rehearsal_agent_suite,
+    create_support_agent_suite,
+)
+from maf_outcome_economics.config import Settings
+from maf_outcome_economics.domain import (
+    BillableModelCall,
+    GovernanceDecision,
+    OutcomeEconomics,
+    TicketWorkflowInput,
+    TicketWorkflowResult,
+    WorkflowVariant,
+)
+from maf_outcome_economics.economics import OutcomeEconomicsCalculator
+from maf_outcome_economics.governance import GovernanceEngine
+from maf_outcome_economics.persistence import (
+    OutcomeRepository,
+    contract_id_for_variant,
+)
+from maf_outcome_economics.telemetry import configure_telemetry
+from maf_outcome_economics.workflows import stream_ticket_workflow
+
+
+class ConsoleProvider(StrEnum):
+    """Execution provider exposed by the console."""
+
+    LIVE = "live"
+    FAKE = "fake"
+
+
+class ConsoleSetupError(RuntimeError):
+    """Raised when console prerequisites are missing."""
+
+
+@dataclass(frozen=True, slots=True)
+class VariantReport:
+    """Persisted quality and economics for one workflow variant."""
+
+    variant: WorkflowVariant
+    runs: int
+    trace_ids: tuple[str, ...]
+    economics: OutcomeEconomics
+    acceptance_rate: float
+    average_quality: float
+    critical_priority_recall: float
+
+
+class ConsoleService:
+    """Run and report on live or explicitly fake workflow executions."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        self.repository = OutcomeRepository(settings.database_path)
+        self._telemetry_configured = False
+
+    async def run_variant(
+        self,
+        variant: WorkflowVariant,
+        limit: int,
+        provider: ConsoleProvider,
+    ) -> list[TicketWorkflowResult]:
+        """Run a labelled ticket subset and require usage for every live result."""
+        if provider is ConsoleProvider.LIVE and not self.settings.azure_openai_configured:
+            raise ConsoleSetupError(
+                "Live mode requires AZURE_OPENAI_ENDPOINT and "
+                "AZURE_OPENAI_CHAT_MODEL. Configure .env and run az login."
+            )
+        tickets = self.repository.list_tickets()[:limit]
+        if not tickets:
+            raise ConsoleSetupError("No tickets found. Run the seed command first.")
+        contract_id = contract_id_for_variant(variant)
+        if self.repository.get_outcome_contract(contract_id) is None:
+            raise ConsoleSetupError("Outcome contract missing. Run the seed command first.")
+
+        if not self._telemetry_configured:
+            configure_telemetry(self.settings.database_path)
+            self._telemetry_configured = True
+        if provider is ConsoleProvider.LIVE:
+            suite = create_support_agent_suite(self.settings)
+        else:
+            suite = create_rehearsal_agent_suite()
+        results: list[TicketWorkflowResult] = []
+        try:
+            for ticket in tickets:
+                before_ids = {
+                    row["id"] for row in self.repository.list_billable_model_usage()
+                }
+                request = TicketWorkflowInput(
+                    ticket=ticket,
+                    business_task_id=f"{variant.value}:{ticket.id}",
+                    batch_id=f"batch-{variant.value}-{uuid4()}",
+                    contract_id=contract_id,
+                    variant=variant,
+                )
+                output = None
+                async for event in stream_ticket_workflow(
+                    request,
+                    self.repository,
+                    suite.triage,
+                    suite.review,
+                ):
+                    if event.type == "output" and isinstance(
+                        event.data, TicketWorkflowResult
+                    ):
+                        output = event.data
+                if output is None:
+                    raise RuntimeError("Workflow did not emit a typed result")
+                if provider is ConsoleProvider.LIVE:
+                    self._flush_telemetry()
+                    new_usage = [
+                        row
+                        for row in self.repository.list_billable_model_usage()
+                        if row["id"] not in before_ids
+                    ]
+                    if not new_usage:
+                        raise RuntimeError(
+                            "Live workflow captured no billable chat telemetry; "
+                            "no synthetic usage was substituted."
+                        )
+                    self.repository.assign_model_usage_to_run(
+                        [str(row["id"]) for row in new_usage], output.run_id
+                    )
+                else:
+                    self._record_rehearsal_usage(output)
+                results.append(output)
+        finally:
+            await suite.close()
+        return results
+
+    def report(self, variant: WorkflowVariant) -> VariantReport:
+        """Calculate quality and economics from persisted normalized records."""
+        runs = self.repository.list_runs(variant)
+        verifications = self.repository.list_routing_verifications(variant)
+        usage = self.repository.list_billable_model_usage_for_variant(variant)
+        if not runs or not verifications:
+            raise ConsoleSetupError(f"No {variant.value} runs found. Run that variant first.")
+        pricing = self.repository.list_pricing()
+        if not pricing:
+            raise ConsoleSetupError("No pricing found. Run the seed command first.")
+        economics = OutcomeEconomicsCalculator(pricing).calculate(
+            [self._model_call(row) for row in usage],
+            verifications,
+        )
+        total = len(verifications)
+        critical = [item for item in verifications if item.critical_priority_expected]
+        return VariantReport(
+            variant=variant,
+            runs=len(runs),
+            trace_ids=tuple(str(row["trace_id"]) for row in runs if row["trace_id"]),
+            economics=economics,
+            acceptance_rate=sum(item.accepted for item in verifications) / total,
+            average_quality=sum(float(item.quality_score) for item in verifications) / total,
+            critical_priority_recall=(
+                sum(item.critical_priority_recalled is True for item in critical)
+                / len(critical)
+                if critical
+                else 1.0
+            ),
+        )
+
+    def decide(self, variant: WorkflowVariant) -> GovernanceDecision:
+        """Evaluate and persist governance for one variant's current evidence."""
+        report = self.report(variant)
+        contract = self.repository.get_outcome_contract(contract_id_for_variant(variant))
+        if contract is None:
+            raise ConsoleSetupError("Outcome contract missing. Run the seed command first.")
+        return GovernanceEngine(self.repository).evaluate(
+            decision_id=f"decision-{variant.value}-{uuid4()}",
+            contract=contract,
+            economics=report.economics,
+            verifications=self.repository.list_routing_verifications(variant),
+            decided_by="maf-outcome-economics-cli",
+        )
+
+    def ticket_trace(self, ticket_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Return runs and safe spans for a ticket identifier."""
+        runs = [row for row in self.repository.list_runs() if row["ticket_id"] == ticket_id]
+        spans = [
+            span
+            for run in runs
+            for span in self.repository.list_telemetry_spans(str(run["id"]))
+        ]
+        return runs, spans
+
+    @staticmethod
+    def _model_call(row: dict[str, Any]) -> BillableModelCall:
+        business_task_id = row.get("business_task_id")
+        if not business_task_id:
+            raise RuntimeError("Billable usage is missing business_task_id attribution")
+        return BillableModelCall(
+            trace_id=str(row["trace_id"]),
+            span_id=str(row["span_id"]),
+            business_task_id=str(business_task_id),
+            provider=str(row["provider"]),
+            model=str(row["model"]),
+            operation_name=str(row["operation_name"]),
+            input_tokens=int(row["input_tokens"]),
+            output_tokens=int(row["output_tokens"]),
+            agent_id=row.get("agent_id"),
+            agent_name=row.get("agent_name"),
+            executor_id=row.get("executor_id"),
+            recorded_at=datetime.fromisoformat(str(row["recorded_at"])),
+        )
+
+    def _record_rehearsal_usage(self, result: TicketWorkflowResult) -> None:
+        calls = [("triage", "TriageAgent", 120, 30)]
+        if result.review_invoked:
+            calls.append(("review", "ReviewAgent", 80, 20))
+        for index, (agent_id, agent_name, input_tokens, output_tokens) in enumerate(calls):
+            self.repository.save_rehearsal_model_call(
+                usage_id=f"rehearsal-{result.run_id}-{index}",
+                run_id=result.run_id,
+                provider="illustrative-provider",
+                model="illustrative-model",
+                agent_id=agent_id,
+                agent_name=agent_name,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
+
+    @staticmethod
+    def _flush_telemetry() -> None:
+        provider = trace.get_tracer_provider()
+        force_flush = getattr(provider, "force_flush", None)
+        if not callable(force_flush) or not force_flush(timeout_millis=10_000):
+            raise RuntimeError("OpenTelemetry provider did not flush live agent spans")

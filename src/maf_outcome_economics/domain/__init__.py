@@ -1,12 +1,16 @@
 """Domain models."""
 
 from .models import (
+	BillableModelCall,
 	EconomicAssessment,
 	EconomicsMetrics,
 	GovernanceAction,
 	GovernanceDecision,
+	GovernanceEvidence,
+	GovernanceReasonCode,
 	Outcome,
 	OutcomeContract,
+	OutcomeEconomics,
 	OutcomeStatus,
 	PricingRecord,
 	ReviewResult,
@@ -22,12 +26,16 @@ from .models import (
 )
 
 __all__ = [
+	"BillableModelCall",
 	"EconomicAssessment",
 	"EconomicsMetrics",
 	"GovernanceAction",
 	"GovernanceDecision",
+	"GovernanceEvidence",
+	"GovernanceReasonCode",
 	"Outcome",
 	"OutcomeContract",
+	"OutcomeEconomics",
 	"OutcomeStatus",
 	"PricingRecord",
 	"ReviewResult",

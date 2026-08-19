@@ -12,11 +12,24 @@ from uuid import uuid4
 import typer
 from opentelemetry import trace
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from maf_outcome_economics.agents import PromptProfile, create_support_agent_suite
 from maf_outcome_economics.config import Settings
-from maf_outcome_economics.domain import PricingRecord, TriageResult
+from maf_outcome_economics.console_service import (
+    ConsoleProvider,
+    ConsoleService,
+    ConsoleSetupError,
+    VariantReport,
+)
+from maf_outcome_economics.domain import (
+    GovernanceDecision,
+    PricingRecord,
+    TicketWorkflowResult,
+    TriageResult,
+    WorkflowVariant,
+)
 from maf_outcome_economics.persistence import (
     FICTIONAL_TICKETS,
     OutcomeRepository,
@@ -95,6 +108,217 @@ def seed(
     console.print(
         "Seeded illustrative pricing. All monetary outputs derived from it are estimated."
     )
+
+
+def _provider_panel(provider: ConsoleProvider) -> Panel:
+    if provider is ConsoleProvider.FAKE:
+        return Panel(
+            "Deterministic fake agents and illustrative token counts are in use. "
+            "These are rehearsal results, not live telemetry.",
+            title="REHEARSAL MODE",
+            border_style="yellow",
+        )
+    return Panel(
+        "Azure OpenAI agents are active. Token counts must come from captured chat spans.",
+        title="LIVE MODE",
+        border_style="green",
+    )
+
+
+def _result_table(
+    results: list[TicketWorkflowResult], provider: ConsoleProvider
+) -> Table:
+    table = Table(title=f"{results[0].variant.value.title()} workflow results")
+    table.add_column("Ticket")
+    table.add_column("Run")
+    table.add_column("Trace ID")
+    table.add_column("Accepted")
+    table.add_column("Review")
+    table.add_column("Usage")
+    usage_label = "illustrative" if provider is ConsoleProvider.FAKE else "captured"
+    for result in results:
+        table.add_row(
+            result.triage.ticket_id,
+            result.run_id,
+            result.trace_id,
+            "yes" if result.verification.accepted else "no",
+            "invoked" if result.review_invoked else "skipped",
+            usage_label,
+        )
+    return table
+
+
+def _comparison_table(reports: list[VariantReport]) -> Table:
+    table = Table(title="Quality and outcome economics")
+    table.add_column("Metric")
+    for report in reports:
+        table.add_column(report.variant.value.title(), justify="right")
+    metrics = (
+        ("Runs", lambda item: str(item.runs)),
+        ("Acceptance rate", lambda item: f"{item.acceptance_rate:.1%}"),
+        ("Average quality", lambda item: f"{item.average_quality:.1%}"),
+        ("Critical recall", lambda item: f"{item.critical_priority_recall:.1%}"),
+        ("Input tokens", lambda item: str(item.economics.total_input_tokens)),
+        ("Output tokens", lambda item: str(item.economics.total_output_tokens)),
+        (
+            "Estimated model cost",
+            lambda item: f"{item.economics.estimated_model_cost:.6f} {item.economics.currency}",
+        ),
+        (
+            "Cost / accepted",
+            lambda item: (
+                f"{item.economics.cost_per_accepted_outcome:.6f}"
+                if item.economics.cost_per_accepted_outcome is not None
+                else "n/a"
+            ),
+        ),
+        (
+            "Tokens / accepted",
+            lambda item: (
+                f"{item.economics.tokens_per_accepted_outcome:.2f}"
+                if item.economics.tokens_per_accepted_outcome is not None
+                else "n/a"
+            ),
+        ),
+    )
+    for label, formatter in metrics:
+        table.add_row(label, *(formatter(report) for report in reports))
+    return table
+
+
+def _decision_panel(decision: GovernanceDecision) -> Panel:
+    reason_codes = ", ".join(code.value for code in decision.reason_codes)
+    actions = "\n".join(f"- {action}" for action in decision.recommended_actions)
+    return Panel(
+        f"{decision.reason}\nReason codes: {reason_codes}\n{actions}",
+        title=f"Governance: {decision.action.value}",
+    )
+
+
+@app.command("run")
+def run_workflow(
+    variant: Annotated[WorkflowVariant, typer.Option(help="Workflow variant to run.")],
+    limit: Annotated[int, typer.Option(min=1, help="Maximum labelled tickets.")] = 20,
+    provider: Annotated[
+        ConsoleProvider,
+        typer.Option(help="Live Azure agents or explicit fake rehearsal agents."),
+    ] = ConsoleProvider.LIVE,
+) -> None:
+    """Run a workflow variant over labelled tickets."""
+    console.print(_provider_panel(provider))
+    try:
+        results = asyncio.run(
+            ConsoleService(Settings.from_env()).run_variant(variant, limit, provider)
+        )
+    except ConsoleSetupError as error:
+        console.print(f"[red]Setup error:[/red] {error}")
+        raise typer.Exit(code=2) from error
+    except Exception as error:
+        console.print(f"[red]Run failed:[/red] {error}")
+        raise typer.Exit(code=1) from error
+    console.print(_result_table(results, provider))
+
+
+@app.command()
+def compare() -> None:
+    """Compare persisted baseline and optimized quality and economics."""
+    service = ConsoleService(Settings.from_env())
+    try:
+        reports = [service.report(variant) for variant in WorkflowVariant]
+    except ConsoleSetupError as error:
+        console.print(f"[red]Comparison unavailable:[/red] {error}")
+        raise typer.Exit(code=2) from error
+    console.print(_comparison_table(reports))
+
+
+@app.command("trace")
+def show_trace(
+    ticket_id: Annotated[str, typer.Option("--ticket", help="Ticket identifier.")],
+) -> None:
+    """Show safe run and span metadata for one ticket."""
+    runs, spans = ConsoleService(Settings.from_env()).ticket_trace(ticket_id)
+    if not runs:
+        console.print(f"[red]No runs found for ticket {ticket_id}.[/red]")
+        raise typer.Exit(code=2)
+    run_table = Table(title=f"Runs for {ticket_id}")
+    run_table.add_column("Run")
+    run_table.add_column("Variant")
+    run_table.add_column("Status")
+    run_table.add_column("Trace ID")
+    for run in runs:
+        run_table.add_row(
+            str(run["id"]),
+            str(run["variant"]),
+            str(run["status"]),
+            str(run["trace_id"] or "n/a"),
+        )
+    console.print(run_table)
+    span_table = Table(title="Safe telemetry metadata")
+    span_table.add_column("Name")
+    span_table.add_column("Trace ID")
+    span_table.add_column("Span ID")
+    span_table.add_column("Status")
+    for span in spans:
+        span_table.add_row(
+            str(span["name"]),
+            str(span["trace_id"]),
+            str(span["span_id"]),
+            str(span["status_code"]),
+        )
+    console.print(span_table)
+
+
+@app.command()
+def decide(
+    variant: Annotated[WorkflowVariant, typer.Option(help="Workflow variant to govern.")],
+) -> None:
+    """Evaluate and persist a deterministic governance decision."""
+    try:
+        decision = ConsoleService(Settings.from_env()).decide(variant)
+    except ConsoleSetupError as error:
+        console.print(f"[red]Decision unavailable:[/red] {error}")
+        raise typer.Exit(code=2) from error
+    console.print(_decision_panel(decision))
+
+
+@app.command()
+def demo(
+    limit: Annotated[int, typer.Option(min=1, help="Tickets per variant.")] = 20,
+    provider: Annotated[
+        ConsoleProvider,
+        typer.Option(help="Live Azure agents or explicit fake rehearsal agents."),
+    ] = ConsoleProvider.LIVE,
+) -> None:
+    """Run both variants on the same data and print economics and governance."""
+    settings = Settings.from_env()
+    repository = OutcomeRepository(settings.database_path)
+    seed_fictional_tickets(repository)
+    if not repository.list_pricing():
+        repository.save_pricing(
+            PricingRecord(
+                id="illustrative-default",
+                provider="illustrative-provider",
+                model="illustrative-model",
+                input_cost_per_million_tokens=Decimal("2.50"),
+                output_cost_per_million_tokens=Decimal("10.00"),
+            )
+        )
+    console.print(_provider_panel(provider))
+    service = ConsoleService(settings)
+    try:
+        for variant in WorkflowVariant:
+            results = asyncio.run(service.run_variant(variant, limit, provider))
+            console.print(_result_table(results, provider))
+        reports = [service.report(variant) for variant in WorkflowVariant]
+        decision = service.decide(WorkflowVariant.OPTIMIZED)
+    except ConsoleSetupError as error:
+        console.print(f"[red]Demo setup error:[/red] {error}")
+        raise typer.Exit(code=2) from error
+    except Exception as error:
+        console.print(f"[red]Demo failed:[/red] {error}")
+        raise typer.Exit(code=1) from error
+    console.print(_comparison_table(reports))
+    console.print(_decision_panel(decision))
 
 
 @app.command("telemetry-smoke-test")

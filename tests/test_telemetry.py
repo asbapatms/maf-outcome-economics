@@ -132,6 +132,7 @@ def test_exporter_associates_ticket_trace_spans_and_usage_with_persisted_run(
             "TKT-TRACE",
             WorkflowVariant.BASELINE,
             trace_id=trace_id,
+            business_task_id="task-trace",
         )
         with tracer.start_as_current_span(
             "chat model call",
@@ -150,9 +151,11 @@ def test_exporter_associates_ticket_trace_spans_and_usage_with_persisted_run(
 
     spans = repository.list_telemetry_spans("run-trace")
     usage = repository.list_model_usage("run-trace")
+    billable_usage = repository.list_billable_model_usage()
     assert {span["name"] for span in spans} == {"tokenomics.ticket", "chat model call"}
     assert len(usage) == 1
     assert usage[0]["trace_id"] == trace_id
+    assert billable_usage[0]["business_task_id"] == "task-trace"
 
 
 def test_configure_telemetry_disables_sensitive_capture(

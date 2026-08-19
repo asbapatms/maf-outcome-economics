@@ -50,6 +50,20 @@ class GovernanceAction(StrEnum):
     REQUEST_REVIEW = "request_review"
     PAUSE = "pause"
     REJECT = "reject"
+    SCALE = "scale"
+    OPTIMIZE = "optimize"
+    STOP = "stop"
+
+
+class GovernanceReasonCode(StrEnum):
+    """Machine-readable reason for a governance decision."""
+
+    THRESHOLDS_MET = "thresholds_met"
+    COST_EXCEEDS_BUDGET = "cost_exceeds_budget"
+    NO_ACCEPTED_OUTCOMES = "no_accepted_outcomes"
+    ACCEPTANCE_BELOW_MINIMUM = "acceptance_below_minimum"
+    QUALITY_BELOW_MINIMUM = "quality_below_minimum"
+    CRITICAL_RECALL_BELOW_MINIMUM = "critical_recall_below_minimum"
 
 
 class Ticket(DomainModel):
@@ -102,6 +116,11 @@ class OutcomeContract(DomainModel):
     target_value: Decimal
     unit: str = Field(min_length=1)
     measurement_window_days: int = Field(gt=0)
+    minimum_acceptance_rate: Decimal = Field(ge=0, le=1)
+    minimum_quality_score: Decimal = Field(ge=0, le=1)
+    minimum_critical_priority_recall: Decimal = Field(ge=0, le=1)
+    maximum_cost_per_accepted_outcome: Decimal = Field(ge=0)
+    budget_currency: str = Field(default="USD", min_length=3, max_length=3)
     created_at: AwareDatetime = Field(default_factory=utc_now)
 
 
@@ -229,6 +248,54 @@ class EconomicsMetrics(DomainModel):
     calculated_at: AwareDatetime = Field(default_factory=utc_now)
 
 
+class BillableModelCall(DomainModel):
+    """One normalized semantic chat model call used for economics."""
+
+    trace_id: str = Field(min_length=1)
+    span_id: str = Field(min_length=1)
+    business_task_id: str = Field(min_length=1)
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    operation_name: str
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    agent_id: str | None = None
+    agent_name: str | None = None
+    executor_id: str | None = None
+    recorded_at: AwareDatetime
+
+
+class OutcomeEconomics(DomainModel):
+    """Aggregated token and estimated-cost economics for verified outcomes."""
+
+    total_input_tokens: int = Field(ge=0)
+    total_output_tokens: int = Field(ge=0)
+    estimated_model_cost: Decimal = Field(ge=0)
+    accepted_outcomes: int = Field(ge=0)
+    cost_per_accepted_outcome: Decimal | None
+    tokens_per_accepted_outcome: Decimal | None
+    agent_contribution_cost: dict[str, Decimal]
+    retry_tax: Decimal = Field(ge=0)
+    coordination_tax: Decimal = Field(ge=0)
+    currency: str = Field(min_length=3, max_length=3)
+    monetary_values_are_estimated: Literal[True] = True
+    calculated_at: AwareDatetime = Field(default_factory=utc_now)
+
+
+class GovernanceEvidence(DomainModel):
+    """Metrics evaluated against an outcome contract's governance thresholds."""
+
+    total_outcomes: int = Field(ge=0)
+    accepted_outcomes: int = Field(ge=0)
+    acceptance_rate: Decimal = Field(ge=0, le=1)
+    average_quality_score: Decimal = Field(ge=0, le=1)
+    critical_outcomes: int = Field(ge=0)
+    critical_priority_recall: Decimal = Field(ge=0, le=1)
+    cost_per_accepted_outcome: Decimal | None = Field(default=None, ge=0)
+    maximum_cost_per_accepted_outcome: Decimal = Field(ge=0)
+    currency: str = Field(min_length=3, max_length=3)
+
+
 class GovernanceDecision(DomainModel):
     """Recorded governance action for an outcome contract."""
 
@@ -236,6 +303,9 @@ class GovernanceDecision(DomainModel):
     contract_id: str = Field(min_length=1)
     action: GovernanceAction
     reason: str = Field(min_length=1)
+    reason_codes: list[GovernanceReasonCode] = Field(default_factory=list)
+    evidence_metrics: GovernanceEvidence | None = None
+    recommended_actions: list[str] = Field(default_factory=list)
     decided_by: str = Field(min_length=1)
     decided_at: AwareDatetime = Field(default_factory=utc_now)
 

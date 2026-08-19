@@ -71,6 +71,41 @@ Seeded prices are illustrative, not vendor price quotes. Pricing-derived model
 fields use the `estimated_` prefix, and `EconomicsMetrics` always sets
 `monetary_values_are_estimated` to `true`.
 
+## Console Workflow
+
+Run each workflow variant over the same ordered labelled dataset, then compare
+quality and economics:
+
+```powershell
+uv run maf-outcome-economics run --variant baseline --limit 20
+uv run maf-outcome-economics run --variant optimized --limit 20
+uv run maf-outcome-economics compare
+uv run maf-outcome-economics trace --ticket TKT-001
+uv run maf-outcome-economics decide --variant optimized
+```
+
+Live Azure OpenAI execution is the default. It requires
+`AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_CHAT_MODEL`, and local Azure
+authentication. A completed live workflow must have captured semantic chat
+usage in SQLite. The command fails instead of substituting token counts when
+that telemetry is absent.
+
+For a deterministic local rehearsal, select the fake provider explicitly:
+
+```powershell
+uv run maf-outcome-economics demo --provider fake --limit 20
+```
+
+The console marks fake runs as `REHEARSAL MODE`. Their provider, model, and
+token counts are illustrative and cannot be interpreted as live telemetry.
+The `demo` command runs baseline and optimized variants over the same ticket
+set, prints trace IDs and token totals, compares quality and estimated
+economics, and persists the optimized governance decision.
+
+For live economics, seed a pricing record whose provider and model labels match
+the normalized Azure OpenAI chat spans. Seeded values remain estimates and
+must be supplied from an approved pricing source.
+
 On Windows ARM64, install and select x64 Python 3.11 before syncing. The Agent
 Framework metapackage includes native dependencies that publish Windows x64,
 but not Windows ARM64, wheels.
@@ -113,8 +148,9 @@ retry. A second invalid response raises `MalformedAgentOutputError`.
 The `baseline` prompt profile provides fuller classification and review
 guidance. The `optimized` profile requests concise JSON only. Neither profile
 includes seeded gold labels. The production `MAFAgentProvider` always invokes
-real MAF agents. The deterministic fake provider exists only under `tests/` and
-cannot be selected by the CLI.
+real MAF agents. The console also provides deterministic fake agents for tests
+and explicitly selected rehearsals. Fake mode never acts as an implicit
+fallback for missing live configuration or telemetry.
 
 After configuring Azure OpenAI and authenticating with `az login`, run one
 fictional ticket through the live triage agent:
@@ -157,6 +193,34 @@ three fields to match; review approval never determines correctness. Persisted
 results include per-field correctness, `correction_required`, a three-field
 quality score, and separate `P1` critical-priority recall. The parent span
 records only verification booleans and numeric quality, never ticket text.
+
+## Outcome Economics
+
+`OutcomeEconomicsCalculator` consumes normalized model calls, deterministic
+verification results, and provider/model pricing. It bills only semantic chat
+calls and defensively deduplicates them by trace ID and span ID, preventing
+outer agent spans or repeated exports from inflating cost.
+
+The result reports input and output tokens, estimated model cost, accepted
+outcomes, cost and tokens per accepted outcome, and estimated contribution cost
+by agent. Per-accepted-outcome values are `None` when no outcome is accepted.
+Retry tax includes calls after the first attempt for the same business task and
+agent. Coordination tax includes reviewer, critic, and aggregator calls;
+`ReviewAgent` is a coordination role for this MVP. Taxes are analytical subsets
+of total model cost and can overlap when a coordination call is also a retry.
+
+## Governance
+
+`GovernanceEngine` reads minimum acceptance, average quality, Critical-priority
+recall, and maximum cost-per-accepted-outcome thresholds from the
+`OutcomeContract`. It returns typed evidence metrics, machine-readable reason
+codes, and recommended actions, and can persist the decision through
+`OutcomeRepository`.
+
+Decision precedence is deterministic. Any failed quality or safety gate, or no
+accepted outcomes, returns `STOP`. When all quality and safety gates pass but
+unit cost is above budget, the engine returns `OPTIMIZE`. It returns `SCALE`
+when every threshold is met; equality counts as meeting a threshold.
 
 ## Telemetry
 

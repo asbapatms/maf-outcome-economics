@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS tickets (
 CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY,
     ticket_id TEXT NOT NULL REFERENCES tickets(id),
+    business_task_id TEXT,
     variant TEXT NOT NULL,
     trace_id TEXT,
     status TEXT NOT NULL,

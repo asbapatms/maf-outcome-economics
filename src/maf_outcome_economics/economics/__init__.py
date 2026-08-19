@@ -1,5 +1,5 @@
 """Economic calculations."""
 
-from .calculator import assess_outcome
+from .calculator import OutcomeEconomicsCalculator, assess_outcome
 
-__all__ = ["assess_outcome"]
+__all__ = ["OutcomeEconomicsCalculator", "assess_outcome"]

@@ -76,6 +76,7 @@ class TicketInputExecutor(Executor):
             request.ticket.id,
             request.variant,
             trace_id=trace_id,
+            business_task_id=request.business_task_id,
         )
         await ctx.send_message(
             TicketWorkflowState(request=request, run_id=run_id, trace_id=trace_id)
