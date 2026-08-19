@@ -9,7 +9,11 @@ from typer.testing import CliRunner
 from maf_outcome_economics.agents import create_rehearsal_agent_suite
 from maf_outcome_economics.cli import AgentSmokeResult, app
 from maf_outcome_economics.config import Settings
-from maf_outcome_economics.console_service import ConsoleProvider, ConsoleService
+from maf_outcome_economics.console_service import (
+    ConsoleProvider,
+    ConsoleService,
+    ConsoleSetupError,
+)
 from maf_outcome_economics.domain import TriageResult, WorkflowVariant
 from maf_outcome_economics.persistence import OutcomeRepository, seed_fictional_tickets
 
@@ -178,6 +182,11 @@ def test_explicit_fake_run_persists_illustrative_usage(
     usage = OutcomeRepository(database_path).list_billable_model_usage()
     assert result.exit_code == 0
     assert "REHEARSAL MODE" in result.stdout
+    assert "baseline 1/1: Starting TKT-001" in result.stdout
+    assert "baseline 1/1: Completed TKT-001" in result.stdout
+    assert "tokens=200" in result.stdout
+    assert "in/50 out" in result.stdout
+    assert "trace=" in result.stdout
     assert "illustrative" in result.stdout
     assert {row["provider"] for row in usage} == {"illustrative-provider"}
     assert sum(int(row["input_tokens"]) for row in usage) == 200
@@ -212,6 +221,42 @@ def test_compare_trace_and_decide_render_persisted_rehearsal_results(
     assert "Governance: scale" in decision.stdout
 
 
+def test_report_explains_how_to_seed_captured_live_model_pricing(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database_path = tmp_path / "cli.db"
+    monkeypatch.setenv("MAF_DATABASE_PATH", str(database_path))
+    runner = CliRunner()
+    assert runner.invoke(app, ["seed"]).exit_code == 0
+    assert runner.invoke(
+        app,
+        ["run", "--variant", "baseline", "--limit", "1", "--provider", "fake"],
+    ).exit_code == 0
+    repository = OutcomeRepository(database_path)
+    run_id = str(repository.list_runs(WorkflowVariant.BASELINE)[0]["id"])
+    repository.save_rehearsal_model_call(
+        usage_id="captured-live-call",
+        run_id=run_id,
+        provider="azure.ai.openai",
+        model="gpt-5.4-mini-2026-03-17",
+        agent_id="triage",
+        agent_name="TriageAgent",
+        input_tokens=100,
+        output_tokens=20,
+    )
+
+    with pytest.raises(ConsoleSetupError) as error:
+        ConsoleService(Settings(database_path=database_path)).report(
+            WorkflowVariant.BASELINE
+        )
+
+    message = str(error.value)
+    assert "azure.ai.openai" in message
+    assert "gpt-5.4-mini-2026-03-17" in message
+    assert "--input-cost-per-million <INPUT_PRICE>" in message
+    assert "--output-cost-per-million <OUTPUT_PRICE>" in message
+
+
 def test_demo_runs_both_variants_with_trace_tokens_and_governance(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -223,6 +268,13 @@ def test_demo_runs_both_variants_with_trace_tokens_and_governance(
 
     assert result.exit_code == 0
     assert "REHEARSAL MODE" in result.stdout
+    assert "Starting baseline variant" in result.stdout
+    assert "baseline 1/1: Starting TKT-001" in result.stdout
+    assert "baseline 1/1: Completed TKT-001" in result.stdout
+    assert "Starting optimized variant" in result.stdout
+    assert "optimized 1/1: Completed TKT-001" in result.stdout
+    assert "Calculating quality and outcome economics" in result.stdout
+    assert "Evaluating optimized governance decision" in result.stdout
     assert "Baseline workflow results" in result.stdout
     assert "Optimized workflow results" in result.stdout
     assert "Trace ID" in result.stdout

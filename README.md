@@ -90,6 +90,12 @@ authentication. A completed live workflow must have captured semantic chat
 usage in SQLite. The command fails instead of substituting token counts when
 that telemetry is absent.
 
+Live economics also requires an approved pricing record that exactly matches
+the provider and response model captured by OpenTelemetry. If a model is
+unpriced, the command prints a ready-to-run `seed` command with placeholders
+for the approved current input and output prices. The application never invents
+model pricing.
+
 For a deterministic local rehearsal, select the fake provider explicitly:
 
 ```powershell
@@ -105,6 +111,39 @@ economics, and persists the optimized governance decision.
 For live economics, seed a pricing record whose provider and model labels match
 the normalized Azure OpenAI chat spans. Seeded values remain estimates and
 must be supplied from an approved pricing source.
+
+## Application Insights Traces
+
+SQLite trace persistence is always enabled. To send the same safe spans to an
+Application Insights resource, copy its connection string from the Azure portal
+and set it locally:
+
+```dotenv
+APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=...;IngestionEndpoint=...
+```
+
+Restart the CLI process after changing `.env`. The `health` command and the
+live-mode panel report whether Application Insights export is configured,
+without displaying the connection string:
+
+```powershell
+uv run maf-outcome-economics health
+uv run maf-outcome-economics demo --provider live --limit 1
+```
+
+Azure Monitor receives spans asynchronously. Allow a few minutes for ingestion,
+then search the Application Insights `requests` and `dependencies` tables by the
+32-character trace ID printed by the CLI:
+
+```kusto
+union requests, dependencies
+| where operation_Id == "<TRACE_ID>"
+| order by timestamp asc
+```
+
+Prompt and ticket text remain disabled. Application Insights receives span
+names, timing, status, trace correlation, model identity, token counts, and the
+safe workflow attributes emitted by this application.
 
 On Windows ARM64, install and select x64 Python 3.11 before syncing. The Agent
 Framework metapackage includes native dependencies that publish Windows x64,

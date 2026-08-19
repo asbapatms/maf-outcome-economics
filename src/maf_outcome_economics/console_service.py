@@ -1,9 +1,10 @@
 """Shared execution and reporting operations for the Typer console."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from opentelemetry import trace
@@ -17,6 +18,7 @@ from maf_outcome_economics.domain import (
     BillableModelCall,
     GovernanceDecision,
     OutcomeEconomics,
+    PricingRecord,
     TicketWorkflowInput,
     TicketWorkflowResult,
     WorkflowVariant,
@@ -55,6 +57,23 @@ class VariantReport:
     critical_priority_recall: float
 
 
+@dataclass(frozen=True, slots=True)
+class TicketProgress:
+    """Safe progress details emitted around one ticket workflow execution."""
+
+    stage: Literal["started", "completed"]
+    variant: WorkflowVariant
+    ticket_id: str
+    current: int
+    total: int
+    run_id: str | None = None
+    trace_id: str | None = None
+    accepted: bool | None = None
+    review_invoked: bool | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+
 class ConsoleService:
     """Run and report on live or explicitly fake workflow executions."""
 
@@ -68,6 +87,7 @@ class ConsoleService:
         variant: WorkflowVariant,
         limit: int,
         provider: ConsoleProvider,
+        progress: Callable[[TicketProgress], None] | None = None,
     ) -> list[TicketWorkflowResult]:
         """Run a labelled ticket subset and require usage for every live result."""
         if provider is ConsoleProvider.LIVE and not self.settings.azure_openai_configured:
@@ -91,7 +111,17 @@ class ConsoleService:
             suite = create_rehearsal_agent_suite()
         results: list[TicketWorkflowResult] = []
         try:
-            for ticket in tickets:
+            for index, ticket in enumerate(tickets, start=1):
+                if progress is not None:
+                    progress(
+                        TicketProgress(
+                            stage="started",
+                            variant=variant,
+                            ticket_id=ticket.id,
+                            current=index,
+                            total=len(tickets),
+                        )
+                    )
                 before_ids = {
                     row["id"] for row in self.repository.list_billable_model_usage()
                 }
@@ -130,9 +160,27 @@ class ConsoleService:
                     self.repository.assign_model_usage_to_run(
                         [str(row["id"]) for row in new_usage], output.run_id
                     )
+                    input_tokens = sum(int(row["input_tokens"]) for row in new_usage)
+                    output_tokens = sum(int(row["output_tokens"]) for row in new_usage)
                 else:
-                    self._record_rehearsal_usage(output)
+                    input_tokens, output_tokens = self._record_rehearsal_usage(output)
                 results.append(output)
+                if progress is not None:
+                    progress(
+                        TicketProgress(
+                            stage="completed",
+                            variant=variant,
+                            ticket_id=ticket.id,
+                            current=index,
+                            total=len(tickets),
+                            run_id=output.run_id,
+                            trace_id=output.trace_id,
+                            accepted=output.verification.accepted,
+                            review_invoked=output.review_invoked,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                        )
+                    )
         finally:
             await suite.close()
         return results
@@ -147,6 +195,7 @@ class ConsoleService:
         pricing = self.repository.list_pricing()
         if not pricing:
             raise ConsoleSetupError("No pricing found. Run the seed command first.")
+        self.require_pricing(usage, pricing)
         economics = OutcomeEconomicsCalculator(pricing).calculate(
             [self._model_call(row) for row in usage],
             verifications,
@@ -167,6 +216,39 @@ class ConsoleService:
                 else 1.0
             ),
         )
+
+    def validate_variant_pricing(self, variant: WorkflowVariant) -> None:
+        """Require approved pricing for every captured call in one variant."""
+        pricing = self.repository.list_pricing()
+        if not pricing:
+            raise ConsoleSetupError("No pricing found. Run the seed command first.")
+        self.require_pricing(
+            self.repository.list_billable_model_usage_for_variant(variant),
+            pricing,
+        )
+
+    @staticmethod
+    def require_pricing(
+        usage: list[dict[str, Any]], pricing: list[PricingRecord]
+    ) -> None:
+        """Raise actionable guidance for captured provider/model pairs without pricing."""
+        priced_models = {(record.provider, record.model) for record in pricing}
+        unpriced_models = sorted(
+            {
+                (str(row["provider"]), str(row["model"]))
+                for row in usage
+                if (str(row["provider"]), str(row["model"])) not in priced_models
+            }
+        )
+        if unpriced_models:
+            provider, model = unpriced_models[0]
+            raise ConsoleSetupError(
+                f"Missing approved pricing for provider={provider!r}, model={model!r}. "
+                "Seed the current prices, then rerun the demo:\n"
+                f"uv run maf-outcome-economics seed --provider {provider} "
+                f"--model {model} --input-cost-per-million <INPUT_PRICE> "
+                "--output-cost-per-million <OUTPUT_PRICE>"
+            )
 
     def decide(self, variant: WorkflowVariant) -> GovernanceDecision:
         """Evaluate and persist governance for one variant's current evidence."""
@@ -212,7 +294,7 @@ class ConsoleService:
             recorded_at=datetime.fromisoformat(str(row["recorded_at"])),
         )
 
-    def _record_rehearsal_usage(self, result: TicketWorkflowResult) -> None:
+    def _record_rehearsal_usage(self, result: TicketWorkflowResult) -> tuple[int, int]:
         calls = [("triage", "TriageAgent", 120, 30)]
         if result.review_invoked:
             calls.append(("review", "ReviewAgent", 80, 20))
@@ -227,6 +309,10 @@ class ConsoleService:
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
             )
+        return (
+            sum(call[2] for call in calls),
+            sum(call[3] for call in calls),
+        )
 
     @staticmethod
     def _flush_telemetry() -> None:

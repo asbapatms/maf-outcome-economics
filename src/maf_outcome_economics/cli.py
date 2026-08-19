@@ -21,6 +21,7 @@ from maf_outcome_economics.console_service import (
     ConsoleProvider,
     ConsoleService,
     ConsoleSetupError,
+    TicketProgress,
     VariantReport,
 )
 from maf_outcome_economics.domain import (
@@ -68,6 +69,10 @@ def health() -> None:
     table.add_row("Agent Framework", version("agent-framework"))
     azure_status = "configured" if settings.azure_openai_configured else "not configured"
     table.add_row("Azure OpenAI", azure_status)
+    app_insights_status = (
+        "configured" if settings.applicationinsights_configured else "not configured"
+    )
+    table.add_row("Application Insights", app_insights_status)
     table.add_row("Database", str(settings.database_path))
     console.print(table)
 
@@ -97,7 +102,7 @@ def seed(
     repository = OutcomeRepository(settings.database_path)
     ticket_count = seed_fictional_tickets(repository)
     pricing = PricingRecord(
-        id="illustrative-default",
+        id=f"pricing:{provider}:{model}",
         provider=provider,
         model=model,
         input_cost_per_million_tokens=Decimal(str(input_cost_per_million)),
@@ -110,16 +115,23 @@ def seed(
     )
 
 
-def _provider_panel(provider: ConsoleProvider) -> Panel:
+def _provider_panel(provider: ConsoleProvider, settings: Settings) -> Panel:
+    telemetry_destination = (
+        "SQLite + Application Insights"
+        if settings.applicationinsights_configured
+        else "SQLite only"
+    )
     if provider is ConsoleProvider.FAKE:
         return Panel(
             "Deterministic fake agents and illustrative token counts are in use. "
-            "These are rehearsal results, not live telemetry.",
+            "These are rehearsal results, not live telemetry.\n"
+            f"Telemetry destination: {telemetry_destination}.",
             title="REHEARSAL MODE",
             border_style="yellow",
         )
     return Panel(
-        "Azure OpenAI agents are active. Token counts must come from captured chat spans.",
+        "Azure OpenAI agents are active. Token counts must come from captured chat spans.\n"
+        f"Telemetry destination: {telemetry_destination}.",
         title="LIVE MODE",
         border_style="green",
     )
@@ -195,6 +207,21 @@ def _decision_panel(decision: GovernanceDecision) -> Panel:
     )
 
 
+def _print_ticket_progress(event: TicketProgress) -> None:
+    prefix = f"{event.variant.value} {event.current}/{event.total}:"
+    if event.stage == "started":
+        console.print(f"[cyan]{prefix}[/cyan] Starting {event.ticket_id}...")
+        return
+    review = "invoked" if event.review_invoked else "skipped"
+    accepted = "yes" if event.accepted else "no"
+    console.print(
+        f"[green]{prefix}[/green] Completed {event.ticket_id} | "
+        f"accepted={accepted} | review={review} | "
+        f"tokens={event.input_tokens} in/{event.output_tokens} out | "
+        f"trace={event.trace_id}"
+    )
+
+
 @app.command("run")
 def run_workflow(
     variant: Annotated[WorkflowVariant, typer.Option(help="Workflow variant to run.")],
@@ -205,10 +232,17 @@ def run_workflow(
     ] = ConsoleProvider.LIVE,
 ) -> None:
     """Run a workflow variant over labelled tickets."""
-    console.print(_provider_panel(provider))
+    settings = Settings.from_env()
+    console.print(_provider_panel(provider, settings))
+    console.print(
+        f"Starting {variant.value} variant with up to {limit} tickets "
+        f"using {provider.value} provider."
+    )
     try:
         results = asyncio.run(
-            ConsoleService(Settings.from_env()).run_variant(variant, limit, provider)
+            ConsoleService(settings).run_variant(
+                variant, limit, provider, _print_ticket_progress
+            )
         )
     except ConsoleSetupError as error:
         console.print(f"[red]Setup error:[/red] {error}")
@@ -296,20 +330,30 @@ def demo(
     if not repository.list_pricing():
         repository.save_pricing(
             PricingRecord(
-                id="illustrative-default",
+                id="pricing:illustrative-provider:illustrative-model",
                 provider="illustrative-provider",
                 model="illustrative-model",
                 input_cost_per_million_tokens=Decimal("2.50"),
                 output_cost_per_million_tokens=Decimal("10.00"),
             )
         )
-    console.print(_provider_panel(provider))
+    console.print(_provider_panel(provider, settings))
     service = ConsoleService(settings)
     try:
         for variant in WorkflowVariant:
-            results = asyncio.run(service.run_variant(variant, limit, provider))
+            console.print(
+                f"\n[bold]Starting {variant.value} variant[/bold]: "
+                f"up to {limit} tickets using {provider.value} provider."
+            )
+            results = asyncio.run(
+                service.run_variant(variant, limit, provider, _print_ticket_progress)
+            )
             console.print(_result_table(results, provider))
+            service.validate_variant_pricing(variant)
+            console.print(f"Completed {variant.value} variant.")
+        console.print("\n[bold]Calculating quality and outcome economics...[/bold]")
         reports = [service.report(variant) for variant in WorkflowVariant]
+        console.print("Evaluating optimized governance decision...")
         decision = service.decide(WorkflowVariant.OPTIMIZED)
     except ConsoleSetupError as error:
         console.print(f"[red]Demo setup error:[/red] {error}")

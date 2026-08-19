@@ -6,6 +6,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import Status, StatusCode
 
+from maf_outcome_economics.config import Settings
 from maf_outcome_economics.domain import Ticket, WorkflowVariant
 from maf_outcome_economics.persistence import OutcomeRepository
 from maf_outcome_economics.telemetry import MAFSpanNormalizer, SQLiteSpanExporter
@@ -162,8 +163,38 @@ def test_configure_telemetry_disables_sensitive_capture(
     tmp_path, mocker
 ) -> None:
     configure = mocker.patch.object(telemetry_setup, "configure_otel_providers")
+    mocker.patch.object(
+        telemetry_setup.Settings,
+        "from_env",
+        return_value=Settings(database_path=tmp_path / "telemetry.db"),
+    )
 
     exporter = telemetry_setup.configure_telemetry(tmp_path / "telemetry.db")
 
     assert isinstance(exporter, SQLiteSpanExporter)
     configure.assert_called_once_with(enable_sensitive_data=False, exporters=[exporter])
+
+
+def test_configure_telemetry_adds_application_insights_exporter_when_configured(
+    tmp_path, mocker
+) -> None:
+    configure = mocker.patch.object(telemetry_setup, "configure_otel_providers")
+    azure_exporter = mocker.patch.object(telemetry_setup, "AzureMonitorTraceExporter")
+    azure_exporter.return_value = mocker.Mock()
+    connection_string = "InstrumentationKey=00000000-0000-0000-0000-000000000000"
+    mocker.patch.object(
+        telemetry_setup.Settings,
+        "from_env",
+        return_value=Settings(
+            applicationinsights_connection_string=connection_string,
+            database_path=tmp_path / "telemetry.db",
+        ),
+    )
+
+    sqlite_exporter = telemetry_setup.configure_telemetry(tmp_path / "telemetry.db")
+
+    azure_exporter.assert_called_once_with(connection_string=connection_string)
+    configure.assert_called_once_with(
+        enable_sensitive_data=False,
+        exporters=[sqlite_exporter, azure_exporter.return_value],
+    )

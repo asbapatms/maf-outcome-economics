@@ -10,9 +10,10 @@ requires-python = ">=3.11"
 dependencies = [
     "agent-framework==1.11.0",
     "azure-identity>=1.25.3",
+    "azure-monitor-opentelemetry-exporter>=1.0.0b56",
     "cryptography==46.0.3",
-    "opentelemetry-exporter-otlp-proto-http>=1.44.0",
-    "opentelemetry-sdk>=1.44.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.43.0,<1.44.0",
+    "opentelemetry-sdk>=1.43.0,<1.44.0",
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",
     "rich>=15.0.0",
