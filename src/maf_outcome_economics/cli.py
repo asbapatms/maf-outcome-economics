@@ -6,6 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from decimal import Decimal
 from importlib.metadata import version
+from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
@@ -24,8 +25,11 @@ from maf_outcome_economics.console_service import (
     TicketProgress,
     VariantReport,
 )
+from maf_outcome_economics.demo_report import write_demo_report
 from maf_outcome_economics.domain import (
+    GovernanceAction,
     GovernanceDecision,
+    GovernanceReasonCode,
     PricingRecord,
     TicketWorkflowResult,
     TriageResult,
@@ -144,16 +148,26 @@ def _result_table(
     table.add_column("Ticket")
     table.add_column("Run")
     table.add_column("Trace ID")
+    table.add_column("Labels")
     table.add_column("Accepted")
     table.add_column("Review")
     table.add_column("Usage")
     usage_label = "illustrative" if provider is ConsoleProvider.FAKE else "captured"
     for result in results:
+        verification = result.verification
+        matched_labels = sum(
+            (
+                verification.category_correct,
+                verification.priority_correct,
+                verification.resolver_group_correct,
+            )
+        )
         table.add_row(
             result.triage.ticket_id,
             result.run_id,
             result.trace_id,
-            "yes" if result.verification.accepted else "no",
+            f"{matched_labels}/3",
+            "yes" if verification.accepted else "no",
             "invoked" if result.review_invoked else "skipped",
             usage_label,
         )
@@ -199,11 +213,124 @@ def _comparison_table(reports: list[VariantReport]) -> Table:
 
 
 def _decision_panel(decision: GovernanceDecision) -> Panel:
+    explanations = {
+        GovernanceReasonCode.THRESHOLDS_MET: (
+            "Quality and safety gates passed, and cost per accepted outcome is "
+            "within budget."
+        ),
+        GovernanceReasonCode.COST_EXCEEDS_BUDGET: (
+            "Quality passed, but cost per accepted outcome exceeds the approved budget."
+        ),
+        GovernanceReasonCode.NO_ACCEPTED_OUTCOMES: (
+            "No outcomes passed deterministic verification."
+        ),
+        GovernanceReasonCode.ACCEPTANCE_BELOW_MINIMUM: (
+            "The verified acceptance rate is below the contract minimum."
+        ),
+        GovernanceReasonCode.QUALITY_BELOW_MINIMUM: (
+            "Average deterministic quality is below the contract minimum."
+        ),
+        GovernanceReasonCode.CRITICAL_RECALL_BELOW_MINIMUM: (
+            "Critical-priority recall is below the safety threshold."
+        ),
+    }
     reason_codes = ", ".join(code.value for code in decision.reason_codes)
+    reasons = "\n".join(f"- {explanations[code]}" for code in decision.reason_codes)
     actions = "\n".join(f"- {action}" for action in decision.recommended_actions)
     return Panel(
-        f"{decision.reason}\nReason codes: {reason_codes}\n{actions}",
-        title=f"Governance: {decision.action.value}",
+        f"[bold]Why[/bold]\n{reasons}\n\n"
+        f"[bold]Recommended action[/bold]\n{actions}\n\n"
+        f"[dim]Audit codes: {reason_codes}[/dim]",
+        title=f"Governance Decision: {decision.action.value.upper()}",
+        border_style="green" if decision.action is GovernanceAction.SCALE else "yellow",
+    )
+
+
+def _demo_intro_panel(limit: int, provider: ConsoleProvider) -> Panel:
+    usage_source = (
+        "actual MAF OpenTelemetry spans"
+        if provider is ConsoleProvider.LIVE
+        else "illustrative rehearsal records"
+    )
+    return Panel(
+        "[bold]Question[/bold]: Can risk-based review preserve routing quality "
+        "while reducing token cost?\n\n"
+        f"[bold]Experiment[/bold]: Run the same {limit} fictional ticket(s) through "
+        "both workflow designs.\n"
+        "[bold]Baseline[/bold]: Triage + review every ticket.\n"
+        "[bold]Optimized[/bold]: Triage every ticket; review only low-confidence, "
+        "sensitive, or critical results.\n"
+        "[bold]Acceptance[/bold]: Category, priority, and resolver group must all "
+        "match hidden gold labels.\n"
+        f"[bold]Usage evidence[/bold]: {usage_source}.",
+        title="OutcomeMeter Experiment",
+        border_style="cyan",
+    )
+
+
+def _variant_strategy_panel(variant: WorkflowVariant) -> Panel:
+    if variant is WorkflowVariant.BASELINE:
+        message = (
+            "Control workflow: every triage result receives a second model review. "
+            "This maximizes oversight but adds coordination tokens."
+        )
+    else:
+        message = (
+            "Treatment workflow: deterministic risk rules invoke review only for "
+            "confidence < 0.8, sensitive content, P1 priority, or a critical category."
+        )
+    return Panel(message, title=f"{variant.value.title()} Strategy", border_style="blue")
+
+
+def _outcome_panel(
+    reports: list[VariantReport],
+    decision: GovernanceDecision,
+) -> Panel:
+    baseline, optimized = reports
+    baseline_tokens = (
+        baseline.economics.total_input_tokens
+        + baseline.economics.total_output_tokens
+    )
+    optimized_tokens = (
+        optimized.economics.total_input_tokens
+        + optimized.economics.total_output_tokens
+    )
+    token_delta = optimized_tokens - baseline_tokens
+    token_change = (
+        Decimal(token_delta) / Decimal(baseline_tokens)
+        if baseline_tokens
+        else Decimal(0)
+    )
+    cost_delta = (
+        optimized.economics.estimated_model_cost
+        - baseline.economics.estimated_model_cost
+    )
+    quality_delta = optimized.average_quality - baseline.average_quality
+    if token_delta < 0:
+        interpretation = (
+            "The optimized workflow preserved measured quality with fewer tokens."
+            if quality_delta >= 0
+            else "The optimized workflow used fewer tokens but reduced measured quality."
+        )
+    elif token_delta == 0:
+        interpretation = (
+            "This sample triggered the same review work in both variants, so no token "
+            "saving was observed."
+        )
+    else:
+        interpretation = "The optimized workflow used more tokens in this sample."
+    return Panel(
+        f"[bold]Token change[/bold]: {token_delta:+,} "
+        f"({token_change:+.1%}; {baseline_tokens:,} baseline -> "
+        f"{optimized_tokens:,} optimized)\n"
+        f"[bold]Estimated cost change[/bold]: {cost_delta:+.6f} "
+        f"{optimized.economics.currency}\n"
+        f"[bold]Average quality change[/bold]: {quality_delta:+.1%}\n"
+        f"[bold]Interpretation[/bold]: {interpretation}\n\n"
+        f"[bold]Decision[/bold]: {decision.action.value.upper()} based on the "
+        "optimized workflow's quality, safety, and unit-cost gates.",
+        title="What Changed and Why It Matters",
+        border_style="magenta",
     )
 
 
@@ -226,15 +353,22 @@ async def _run_demo_variants(
     service: ConsoleService,
     limit: int,
     provider: ConsoleProvider,
-) -> tuple[list[VariantReport], GovernanceDecision]:
+) -> tuple[list[VariantReport], GovernanceDecision, list[TicketProgress]]:
     """Run both demo variants on one event loop and calculate the decision."""
+    progress_events: list[TicketProgress] = []
+
+    def record_progress(event: TicketProgress) -> None:
+        progress_events.append(event)
+        _print_ticket_progress(event)
+
     for variant in WorkflowVariant:
+        console.print(_variant_strategy_panel(variant))
         console.print(
             f"\n[bold]Starting {variant.value} variant[/bold]: "
             f"up to {limit} tickets using {provider.value} provider."
         )
         results = await service.run_variant(
-            variant, limit, provider, _print_ticket_progress
+            variant, limit, provider, record_progress
         )
         console.print(_result_table(results, provider))
         service.validate_variant_pricing(variant)
@@ -242,7 +376,7 @@ async def _run_demo_variants(
     console.print("\n[bold]Calculating quality and outcome economics...[/bold]")
     reports = [service.report(variant) for variant in WorkflowVariant]
     console.print("Evaluating optimized governance decision...")
-    return reports, service.decide(WorkflowVariant.OPTIMIZED)
+    return reports, service.decide(WorkflowVariant.OPTIMIZED), progress_events
 
 
 @app.command("run")
@@ -348,8 +482,14 @@ def demo(
         ConsoleProvider,
         typer.Option(help="Live Azure agents or explicit fake rehearsal agents."),
     ] = ConsoleProvider.LIVE,
+    html_output: Annotated[
+        Path,
+        typer.Option(
+            help="Self-contained HTML report written after each successful demo."
+        ),
+    ] = Path("artifacts/hackathon-live-demo.html"),
 ) -> None:
-    """Run both variants on the same data and print economics and governance."""
+    """Run both variants and render console plus HTML economics evidence."""
     settings = Settings.from_env()
     repository = OutcomeRepository(settings.database_path)
     seed_fictional_tickets(repository)
@@ -364,9 +504,10 @@ def demo(
             )
         )
     console.print(_provider_panel(provider, settings))
+    console.print(_demo_intro_panel(limit, provider))
     service = ConsoleService(settings)
     try:
-        reports, decision = asyncio.run(
+        reports, decision, progress_events = asyncio.run(
             _run_demo_variants(service, limit, provider)
         )
     except ConsoleSetupError as error:
@@ -379,7 +520,21 @@ def demo(
         console.print(f"[red]Demo failed:[/red] {error}")
         raise typer.Exit(code=1) from error
     console.print(_comparison_table(reports))
+    console.print(_outcome_panel(reports, decision))
     console.print(_decision_panel(decision))
+    try:
+        report_path = write_demo_report(
+            html_output,
+            reports,
+            decision,
+            provider,
+            progress_events,
+            limit,
+        )
+    except OSError as error:
+        console.print(f"[red]HTML report failed:[/red] {error}")
+        raise typer.Exit(code=1) from error
+    console.print(f"[bold green]HTML report:[/bold green] {report_path}")
 
 
 @app.command("telemetry-smoke-test")

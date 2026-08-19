@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OutcomeMeter Live Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --canvas: #101516;
+      --panel: #182022;
+      --panel-alt: #1d282a;
+      --line: #385055;
+      --ink: #f2f6f4;
+      --muted: #9eb0ae;
+      --cyan: #44d7cf;
+      --green: #7ae582;
+      --amber: #ffca5c;
+      --red: #ff6b6b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background-color: var(--canvas);
+      background-image:
+        linear-gradient(rgba(68, 215, 207, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(68, 215, 207, 0.045) 1px, transparent 1px);
+      background-size: 32px 32px;
+      color: var(--ink);
+      font-family: Bahnschrift, "Arial Narrow", sans-serif;
+      letter-spacing: 0;
+    }
+
+    main {
+      width: 1600px;
+      min-height: 1200px;
+      padding: 72px 82px 64px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      gap: 40px;
+      border-bottom: 2px solid var(--cyan);
+      padding-bottom: 28px;
+      margin-bottom: 34px;
+    }
+
+    .eyebrow {
+      color: var(--cyan);
+      font: 700 20px/1.2 "Cascadia Mono", Consolas, monospace;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 8px 0 10px;
+      font-size: 62px;
+      line-height: 1;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 25px;
+      line-height: 1.35;
+    }
+
+    .live-badge {
+      border: 1px solid var(--green);
+      color: var(--green);
+      padding: 13px 18px;
+      font: 700 20px/1 "Cascadia Mono", Consolas, monospace;
+      text-transform: uppercase;
+    }
+
+    .question {
+      background: var(--panel-alt);
+      border-left: 7px solid var(--cyan);
+      padding: 24px 28px;
+      margin-bottom: 28px;
+      font-size: 29px;
+      line-height: 1.35;
+    }
+
+    .question strong { color: var(--cyan); }
+
+    .experiment {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      margin-bottom: 28px;
+    }
+
+    .strategy {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 24px 26px;
+    }
+
+    .strategy h2,
+    .section-title {
+      margin: 0 0 10px;
+      font-size: 26px;
+      color: var(--cyan);
+    }
+
+    .strategy p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 21px;
+      line-height: 1.45;
+    }
+
+    .strategy.optimized { border-color: var(--green); }
+    .strategy.optimized h2 { color: var(--green); }
+
+    .terminal {
+      background: #0b0f10;
+      border: 1px solid var(--line);
+      padding: 24px 26px;
+      margin-bottom: 28px;
+      font: 19px/1.55 "Cascadia Mono", Consolas, monospace;
+    }
+
+    .terminal-head {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      border-bottom: 1px solid #293538;
+      padding-bottom: 13px;
+      margin-bottom: 14px;
+    }
+
+    .terminal-line { white-space: nowrap; }
+    .prompt { color: var(--cyan); }
+    .yes { color: var(--green); }
+    .no { color: var(--red); }
+    .skip { color: var(--amber); }
+    .trace { color: #7fb8ff; }
+
+    .results {
+      display: grid;
+      grid-template-columns: 1.18fr 0.82fr;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      font: 20px/1.3 "Cascadia Mono", Consolas, monospace;
+    }
+
+    caption {
+      text-align: left;
+      color: var(--cyan);
+      font: 700 26px/1.2 Bahnschrift, sans-serif;
+      padding-bottom: 12px;
+    }
+
+    th, td {
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: right;
+    }
+
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 400; }
+    td:last-child { color: var(--green); }
+
+    .impact {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .metric {
+      background: var(--panel-alt);
+      border-top: 4px solid var(--green);
+      padding: 18px;
+      min-height: 118px;
+    }
+
+    .metric .value {
+      color: var(--green);
+      font: 700 38px/1 "Cascadia Mono", Consolas, monospace;
+    }
+
+    .metric .label {
+      display: block;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .governance {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 28px;
+      align-items: center;
+      background: #28191a;
+      border: 2px solid var(--red);
+      padding: 26px 30px;
+    }
+
+    .decision {
+      color: var(--red);
+      font: 700 64px/1 "Cascadia Mono", Consolas, monospace;
+      text-align: center;
+    }
+
+    .governance h2 {
+      margin: 0 0 8px;
+      color: var(--red);
+      font-size: 27px;
+    }
+
+    .governance p {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.4;
+    }
+
+    .audit {
+      margin-top: 8px;
+      color: var(--muted);
+      font: 17px/1.3 "Cascadia Mono", Consolas, monospace;
+    }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 24px;
+      color: var(--muted);
+      font: 17px/1.3 "Cascadia Mono", Consolas, monospace;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <div class="eyebrow">Microsoft Agent Framework · Outcome Economics</div>
+        <h1>OutcomeMeter</h1>
+        <p class="subtitle">Live Azure OpenAI workflow evidence, measured per verified outcome</p>
+      </div>
+      <div class="live-badge">● Live mode</div>
+    </header>
+
+    <section class="question">
+      <strong>Experiment:</strong> Can risk-based review preserve routing quality while reducing token cost?
+    </section>
+
+    <section class="experiment">
+      <div class="strategy">
+        <h2>Baseline</h2>
+        <p>Triage and review every ticket. Maximum oversight, with coordination tokens on every run.</p>
+      </div>
+      <div class="strategy optimized">
+        <h2>Optimized</h2>
+        <p>Triage every ticket. Invoke review only for low confidence, sensitive content, P1 priority, or critical categories.</p>
+      </div>
+    </section>
+
+    <section class="terminal" aria-label="Selected live console output">
+      <div class="terminal-head">
+        <span>LIVE CONSOLE EVIDENCE</span>
+        <span>SQLite + Application Insights</span>
+      </div>
+      <div class="terminal-line"><span class="prompt">baseline 1/2</span> · TKT-001 · <span class="no">accepted=no</span> · review=invoked · tokens=759 in/218 out · <span class="trace">trace=9e3a…83c2</span></div>
+      <div class="terminal-line"><span class="prompt">baseline 2/2</span> · TKT-002 · <span class="no">accepted=no</span> · review=invoked · tokens=774 in/238 out · <span class="trace">trace=afa0…eef1</span></div>
+      <div class="terminal-line"><span class="prompt">optimized 1/2</span> · TKT-001 · <span class="no">accepted=no</span> · review=invoked · tokens=621 in/230 out · <span class="trace">trace=21d3…01c4</span></div>
+      <div class="terminal-line"><span class="prompt">optimized 2/2</span> · TKT-002 · <span class="no">accepted=no</span> · <span class="skip">review=skipped</span> · tokens=248 in/116 out · <span class="trace">trace=0b08…6bfc</span></div>
+    </section>
+
+    <section class="results">
+      <table>
+        <caption>Quality and Outcome Economics</caption>
+        <thead>
+          <tr><th>Metric</th><th>Baseline</th><th>Optimized</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Acceptance rate</td><td>41.7%</td><td>80.0%</td></tr>
+          <tr><td>Average quality</td><td>54.2%</td><td>88.0%</td></tr>
+          <tr><td>Critical recall</td><td>57.1%</td><td>100.0%</td></tr>
+          <tr><td>Total tokens</td><td>33,119</td><td>7,378</td></tr>
+          <tr><td>Estimated model cost</td><td>$0.065746</td><td>$0.021145</td></tr>
+          <tr><td>Cost / accepted</td><td>$0.003287</td><td>$0.001057</td></tr>
+        </tbody>
+      </table>
+
+      <div>
+        <h2 class="section-title">Measured Impact</h2>
+        <div class="impact">
+          <div class="metric"><span class="value">−77.7%</span><span class="label">token usage</span></div>
+          <div class="metric"><span class="value">−67.8%</span><span class="label">cost per accepted outcome</span></div>
+          <div class="metric"><span class="value">+33.8%</span><span class="label">average quality</span></div>
+          <div class="metric"><span class="value">100%</span><span class="label">critical recall</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="governance">
+      <div class="decision">STOP</div>
+      <div>
+        <h2>Governance worked: savings alone are not enough</h2>
+        <p>Average quality reached 88.0%, below the contract minimum of 90%. Rollout is stopped until the failed quality gate is addressed.</p>
+        <div class="audit">audit code: quality_below_minimum</div>
+      </div>
+    </section>
+
+    <footer>
+      <span>Actual MAF OpenTelemetry spans · deterministic hidden-label verification</span>
+      <span>Captured 2026-08-19</span>
+    </footer>
+  </main>
+</body>
+</html>

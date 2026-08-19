@@ -41,11 +41,25 @@ uv run maf-outcome-economics health
 
 ## 0:20 to 1:20: Execute Real Model Calls
 
-Run the same fictional ticket through baseline and optimized workflows:
+Run the same two fictional tickets through baseline and optimized workflows:
 
 ```powershell
-uv run maf-outcome-economics demo --provider live --limit 1
+uv run maf-outcome-economics demo --provider live --limit 2
 ```
+
+Every successful run refreshes `artifacts/hackathon-live-demo.html` with that
+run's ticket evidence and the current persisted economics. Open the page in a
+browser for the video or hackathon submission. Use a different destination when
+you need to preserve multiple runs:
+
+```powershell
+uv run maf-outcome-economics demo --provider live --limit 2 `
+	--html-output artifacts/demo-2026-08-19.html
+```
+
+`TKT-001` contains password-related content, so optimized review remains enabled
+to demonstrate the safety gate. `TKT-002` is a routine billing ticket, so a
+high-confidence result can skip review and demonstrate token savings.
 
 As each workflow completes, call out these fields from the progress line:
 

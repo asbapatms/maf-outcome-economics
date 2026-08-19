@@ -140,7 +140,16 @@ The console marks fake runs as `REHEARSAL MODE`. Their provider, model, and
 token counts are illustrative and cannot be interpreted as live telemetry.
 The `demo` command runs baseline and optimized variants over the same ticket
 set, prints trace IDs and token totals, compares quality and estimated
-economics, and persists the optimized governance decision.
+economics, persists the optimized governance decision, and refreshes the
+self-contained `artifacts/hackathon-live-demo.html` visual report. The page is
+generated from typed run evidence rather than parsed console text.
+
+Choose another report path to retain a specific run:
+
+```powershell
+uv run maf-outcome-economics demo --provider fake --limit 2 `
+    --html-output artifacts/rehearsal-demo.html
+```
 
 For live economics, seed a pricing record whose provider and model labels match
 the normalized Azure OpenAI chat spans. Seeded values remain estimates and

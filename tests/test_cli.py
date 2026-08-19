@@ -265,7 +265,7 @@ def test_compare_trace_and_decide_render_persisted_rehearsal_results(
     assert "Safe telemetry metadata" in trace_result.stdout
     assert "VPN drops every few minutes" not in trace_result.stdout
     assert decision.exit_code == 0
-    assert "Governance: scale" in decision.stdout
+    assert "Governance Decision: SCALE" in decision.stdout
 
 
 def test_report_explains_how_to_seed_captured_live_model_pricing(
@@ -308,22 +308,50 @@ def test_demo_runs_both_variants_with_trace_tokens_and_governance(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("MAF_DATABASE_PATH", str(tmp_path / "demo.db"))
+    html_output = tmp_path / "demo.html"
 
     result = CliRunner().invoke(
-        app, ["demo", "--limit", "1", "--provider", "fake"]
+        app,
+        [
+            "demo",
+            "--limit",
+            "1",
+            "--provider",
+            "fake",
+            "--html-output",
+            str(html_output),
+        ],
     )
 
     assert result.exit_code == 0
     assert "REHEARSAL MODE" in result.stdout
+    assert "OutcomeMeter Experiment" in result.stdout
+    assert "Can risk-based review preserve routing quality" in result.stdout
+    assert "Baseline Strategy" in result.stdout
     assert "Starting baseline variant" in result.stdout
     assert "baseline 1/1: Starting TKT-001" in result.stdout
     assert "baseline 1/1: Completed TKT-001" in result.stdout
     assert "Starting optimized variant" in result.stdout
+    assert "Optimized Strategy" in result.stdout
     assert "optimized 1/1: Completed TKT-001" in result.stdout
     assert "Calculating quality and outcome economics" in result.stdout
     assert "Evaluating optimized governance decision" in result.stdout
     assert "Baseline workflow results" in result.stdout
     assert "Optimized workflow results" in result.stdout
     assert "Trace ID" in result.stdout
+    assert "Labels" in result.stdout
+    assert "3/3" in result.stdout
     assert "Input tokens" in result.stdout
-    assert "Governance: scale" in result.stdout
+    assert "What Changed and Why It Matters" in result.stdout
+    assert "Token change" in result.stdout
+    assert "Decision" in result.stdout
+    assert "Governance Decision: SCALE" in result.stdout
+    assert "Quality and safety gates passed" in result.stdout
+    assert "Audit codes: thresholds_met" in result.stdout
+    assert "HTML report:" in result.stdout
+    assert html_output.exists()
+    html = html_output.read_text(encoding="utf-8")
+    assert "OutcomeMeter Demo Report" in html
+    assert "Illustrative rehearsal telemetry" in html
+    assert "TKT-001" in html
+    assert "thresholds_met" in html
