@@ -11,6 +11,11 @@ ms.topic: overview
 impact of measurable outcomes. It combines deterministic calculations and
 verification with Microsoft Agent Framework workflows and Azure OpenAI.
 
+> [!IMPORTANT]
+> Every seeded support ticket is fictional. Sensitive telemetry capture is
+> disabled in code, and prompt, response, ticket, tool-argument, and tool-result
+> content is excluded from the SQLite and Azure Monitor exporters.
+
 ## Repository Structure
 
 ```text
@@ -35,12 +40,41 @@ maf-outcome-economics/
 ```powershell
 uv sync --locked
 Copy-Item .env.example .env
-uv run maf-outcome-economics health
 ```
 
-Use `az login` for local passwordless Azure authentication. In production, use
-a managed identity. Never commit `.env`, API keys, tokens, or connection
-strings.
+### Azure authentication
+
+The live provider uses `DefaultAzureCredential`. Authenticate locally with the
+Azure CLI and confirm the active subscription before starting the CLI:
+
+```powershell
+az login
+az account show --output table
+```
+
+Use `az login --tenant <TENANT_ID>` when the Azure OpenAI resource belongs to a
+specific tenant. The signed-in identity needs permission to invoke the model
+deployment. In Azure-hosted environments, use managed identity instead of a
+developer login. Never commit `.env`, tokens, or connection strings.
+
+### Required environment variables
+
+Set these values in the local `.env` file for live execution:
+
+| Variable | Requirement | Purpose |
+|----------|-------------|---------|
+| `AZURE_OPENAI_ENDPOINT` | Required | Azure OpenAI resource endpoint |
+| `AZURE_OPENAI_CHAT_MODEL` | Required | Azure deployment name |
+| `AZURE_OPENAI_API_VERSION` | Recommended | Responses API version, currently `preview` |
+| `MAF_DATABASE_PATH` | Optional | SQLite path, defaults to `data/outcomes.db` |
+
+`APPLICATIONINSIGHTS_CONNECTION_STRING`, console exporters, and OTLP export are
+optional observability settings. Run the non-secret health check after editing
+the file:
+
+```powershell
+uv run maf-outcome-economics health
+```
 
 The installed MAF `OpenAIChatClient` uses Azure's Responses API. Keep
 `AZURE_OPENAI_API_VERSION=preview` unless the installed client documents a newer
@@ -61,10 +95,10 @@ The seed command accepts illustrative token prices for local scenarios:
 
 ```powershell
 uv run maf-outcome-economics seed `
-	--provider illustrative-provider `
-	--model illustrative-model `
-	--input-cost-per-million 2.50 `
-	--output-cost-per-million 10.00
+    --provider illustrative-provider `
+    --model illustrative-model `
+    --input-cost-per-million 2.50 `
+    --output-cost-per-million 10.00
 ```
 
 Seeded prices are illustrative, not vendor price quotes. Pricing-derived model
@@ -112,6 +146,18 @@ For live economics, seed a pricing record whose provider and model labels match
 the normalized Azure OpenAI chat spans. Seeded values remain estimates and
 must be supplied from an approved pricing source.
 
+Execute the complete live comparison after authentication, configuration, and
+pricing setup:
+
+```powershell
+uv run maf-outcome-economics demo --provider live --limit 1
+```
+
+The command prints progress for every fictional ticket, real trace IDs, actual
+input and output token counts from model spans, deterministic acceptance, a
+baseline-to-optimized economics comparison, and a `SCALE`, `OPTIMIZE`, or
+`STOP` governance result. See [DEMO.md](DEMO.md) for the two-minute sequence.
+
 ## Application Insights Traces
 
 SQLite trace persistence is always enabled. To send the same safe spans to an
@@ -144,6 +190,52 @@ union requests, dependencies
 Prompt and ticket text remain disabled. Application Insights receives span
 names, timing, status, trace correlation, model identity, token counts, and the
 safe workflow attributes emitted by this application.
+
+## Local Telemetry Exporters
+
+### Console exporters
+
+Enable Agent Framework console exporters for a local diagnostic run by setting
+this value in `.env`:
+
+```dotenv
+ENABLE_CONSOLE_EXPORTERS=true
+```
+
+Run a one-ticket rehearsal or live workflow, then restore the setting to
+`false` when the additional terminal output is no longer needed:
+
+```powershell
+uv run maf-outcome-economics run --variant optimized --provider fake --limit 1
+```
+
+Console output follows the same sensitive-data setting. The application always
+passes `enable_sensitive_data=False` to Agent Framework telemetry setup.
+
+### Optional Aspire Dashboard OTLP export
+
+Start a standalone Aspire Dashboard with anonymous local OTLP ingestion. The
+dashboard UI listens on port `18888`, and OTLP HTTP listens on host port `4318`:
+
+```powershell
+docker run --rm --name aspire-dashboard `
+    -p 18888:18888 `
+    -p 4317:18889 `
+    -p 4318:18890 `
+    -e DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true `
+    mcr.microsoft.com/dotnet/aspire-dashboard:latest
+```
+
+Set the collector endpoint in `.env`, restart the CLI process, and open
+<http://localhost:18888>:
+
+```dotenv
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+```
+
+Remove `OTEL_EXPORTER_OTLP_ENDPOINT` when the dashboard is not running. Leaving
+an unavailable endpoint configured causes expected exporter connection errors.
 
 On Windows ARM64, install and select x64 Python 3.11 before syncing. The Agent
 Framework metapackage includes native dependencies that publish Windows x64,
@@ -212,7 +304,7 @@ workflow from installed `Executor`, `WorkflowBuilder`, `WorkflowContext`, and
 2. `TriageAgentExecutor` invokes the triage agent.
 3. `ReviewAgentExecutor` invokes or deterministically skips review.
 4. `OutcomeVerifierExecutor` compares effective labels with fictional gold
-	labels.
+    labels.
 5. `ResultExecutor` completes persistence and yields `TicketWorkflowResult`.
 
 Baseline runs invoke both agents for every ticket. Optimized runs invoke review
@@ -283,6 +375,13 @@ message routing, and error type when available.
 Only spans with `gen_ai.operation.name=chat` and a request or response model are
 billable model calls. Both spans and billable usage are deduplicated by trace ID
 and span ID.
+
+A chat span is billable only when it contains explicit, valid, nonnegative
+input and output token attributes. Spans with missing or malformed token
+counters remain available for diagnostics but are excluded from economics.
+Failed, cancelled, interrupted, or partially consumed workflow streams
+terminalize created runs as `failed` or `interrupted` rather than leaving them
+in `running` state.
 
 Run the offline smoke test to emit a custom span, flush the OpenTelemetry
 provider, and prove the record exists in the configured SQLite database:

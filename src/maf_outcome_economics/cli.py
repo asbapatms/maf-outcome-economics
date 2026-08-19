@@ -222,6 +222,29 @@ def _print_ticket_progress(event: TicketProgress) -> None:
     )
 
 
+async def _run_demo_variants(
+    service: ConsoleService,
+    limit: int,
+    provider: ConsoleProvider,
+) -> tuple[list[VariantReport], GovernanceDecision]:
+    """Run both demo variants on one event loop and calculate the decision."""
+    for variant in WorkflowVariant:
+        console.print(
+            f"\n[bold]Starting {variant.value} variant[/bold]: "
+            f"up to {limit} tickets using {provider.value} provider."
+        )
+        results = await service.run_variant(
+            variant, limit, provider, _print_ticket_progress
+        )
+        console.print(_result_table(results, provider))
+        service.validate_variant_pricing(variant)
+        console.print(f"Completed {variant.value} variant.")
+    console.print("\n[bold]Calculating quality and outcome economics...[/bold]")
+    reports = [service.report(variant) for variant in WorkflowVariant]
+    console.print("Evaluating optimized governance decision...")
+    return reports, service.decide(WorkflowVariant.OPTIMIZED)
+
+
 @app.command("run")
 def run_workflow(
     variant: Annotated[WorkflowVariant, typer.Option(help="Workflow variant to run.")],
@@ -247,6 +270,9 @@ def run_workflow(
     except ConsoleSetupError as error:
         console.print(f"[red]Setup error:[/red] {error}")
         raise typer.Exit(code=2) from error
+    except KeyboardInterrupt as error:
+        console.print("[yellow]Run interrupted.[/yellow]")
+        raise typer.Exit(code=130) from error
     except Exception as error:
         console.print(f"[red]Run failed:[/red] {error}")
         raise typer.Exit(code=1) from error
@@ -340,24 +366,15 @@ def demo(
     console.print(_provider_panel(provider, settings))
     service = ConsoleService(settings)
     try:
-        for variant in WorkflowVariant:
-            console.print(
-                f"\n[bold]Starting {variant.value} variant[/bold]: "
-                f"up to {limit} tickets using {provider.value} provider."
-            )
-            results = asyncio.run(
-                service.run_variant(variant, limit, provider, _print_ticket_progress)
-            )
-            console.print(_result_table(results, provider))
-            service.validate_variant_pricing(variant)
-            console.print(f"Completed {variant.value} variant.")
-        console.print("\n[bold]Calculating quality and outcome economics...[/bold]")
-        reports = [service.report(variant) for variant in WorkflowVariant]
-        console.print("Evaluating optimized governance decision...")
-        decision = service.decide(WorkflowVariant.OPTIMIZED)
+        reports, decision = asyncio.run(
+            _run_demo_variants(service, limit, provider)
+        )
     except ConsoleSetupError as error:
         console.print(f"[red]Demo setup error:[/red] {error}")
         raise typer.Exit(code=2) from error
+    except KeyboardInterrupt as error:
+        console.print("[yellow]Demo interrupted.[/yellow]")
+        raise typer.Exit(code=130) from error
     except Exception as error:
         console.print(f"[red]Demo failed:[/red] {error}")
         raise typer.Exit(code=1) from error
@@ -451,6 +468,9 @@ def agent_smoke_test(
         raise typer.Exit(code=2)
     try:
         result = asyncio.run(_run_agent_smoke_test(settings, profile))
+    except KeyboardInterrupt as error:
+        console.print("Agent smoke test interrupted.")
+        raise typer.Exit(code=130) from error
     except Exception as error:
         console.print(f"Agent smoke test failed: {error}")
         raise typer.Exit(code=1) from error

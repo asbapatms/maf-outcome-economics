@@ -3,6 +3,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from math import isfinite
 from typing import Any
 
 from opentelemetry.sdk.trace import ReadableSpan
@@ -37,6 +38,7 @@ class NormalizedSpan:
     attributes: dict[str, Any]
     input_tokens: int
     output_tokens: int
+    has_token_usage: bool
     agent_id: str | None
     agent_name: str | None
     provider_name: str | None
@@ -53,7 +55,11 @@ class NormalizedSpan:
     @property
     def is_billable_model_call(self) -> bool:
         """Return whether this is a semantic chat model-call span."""
-        return self.operation_name == "chat" and bool(self.request_model or self.response_model)
+        return (
+            self.operation_name == "chat"
+            and bool(self.request_model or self.response_model)
+            and self.has_token_usage
+        )
 
 
 class MAFSpanNormalizer:
@@ -72,6 +78,8 @@ class MAFSpanNormalizer:
         parent_span_id = None
         if span.parent is not None and span.parent.span_id:
             parent_span_id = f"{span.parent.span_id:016x}"
+        input_tokens = self._token_count(attributes, "gen_ai.usage.input_tokens")
+        output_tokens = self._token_count(attributes, "gen_ai.usage.output_tokens")
 
         return NormalizedSpan(
             trace_id=f"{span.context.trace_id:032x}",
@@ -83,8 +91,9 @@ class MAFSpanNormalizer:
             status_code=span.status.status_code.name,
             status_description=span.status.description,
             attributes=attributes,
-            input_tokens=self._integer(attributes, "gen_ai.usage.input_tokens"),
-            output_tokens=self._integer(attributes, "gen_ai.usage.output_tokens"),
+            input_tokens=input_tokens or 0,
+            output_tokens=output_tokens or 0,
+            has_token_usage=input_tokens is not None and output_tokens is not None,
             agent_id=self._text(attributes, "gen_ai.agent.id"),
             agent_name=self._text(attributes, "gen_ai.agent.name"),
             provider_name=self._text(attributes, "gen_ai.provider.name"),
@@ -116,9 +125,14 @@ class MAFSpanNormalizer:
         return value
 
     @staticmethod
-    def _integer(attributes: Mapping[str, Any], key: str) -> int:
-        value = attributes.get(key, 0)
-        return int(value) if isinstance(value, (int, float)) else 0
+    def _token_count(attributes: Mapping[str, Any], key: str) -> int | None:
+        value = attributes.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        if isinstance(value, float) and not isfinite(value):
+            return None
+        integer = int(value)
+        return integer if integer >= 0 and integer == value else None
 
     @staticmethod
     def _text(attributes: Mapping[str, Any], key: str) -> str | None:

@@ -1,5 +1,6 @@
 """Mocked tests for the sequential ticket workflow."""
 
+import asyncio
 from decimal import Decimal
 
 import pytest
@@ -118,8 +119,43 @@ async def _stream(
             tracer=provider.get_tracer("ticket-workflow-tests"),
         )
     ]
-    provider.shutdown()
     return events, exporter.get_finished_spans()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "expected_status"),
+    [
+        (RuntimeError("agent failed"), "failed"),
+        (asyncio.CancelledError(), "interrupted"),
+    ],
+)
+async def test_given_execution_terminates_when_streamed_then_run_is_terminal(
+    tmp_path,
+    mocker,
+    error: BaseException,
+    expected_status: str,
+) -> None:
+    # Arrange
+    repository = _repository(tmp_path)
+    triage_agent, review_agent = _agents(mocker, _triage())
+    triage_agent.run.side_effect = error
+    request = TicketWorkflowInput(
+        ticket=_ticket(),
+        business_task_id="task-terminated",
+        batch_id="batch-terminated",
+        contract_id="contract-routing",
+        variant=WorkflowVariant.BASELINE,
+    )
+
+    # Act and assert
+    with pytest.raises(type(error)):
+        await _stream(request, repository, triage_agent, review_agent)
+
+    runs = repository.list_runs()
+    assert len(runs) == 1
+    assert runs[0]["status"] == expected_status
+    assert runs[0]["completed_at"] is not None
 
 
 @pytest.mark.asyncio

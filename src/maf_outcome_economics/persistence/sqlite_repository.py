@@ -165,6 +165,17 @@ class OutcomeRepository:
             if cursor.rowcount == 0:
                 raise KeyError(f"Run not found: {run_id}")
 
+    def terminate_run_by_trace(self, trace_id: str, *, interrupted: bool) -> None:
+        """Terminalize a running workflow after failure or interruption."""
+        self.initialize()
+        status = "interrupted" if interrupted else "failed"
+        with self._connect() as connection:
+            connection.execute(
+                """UPDATE runs SET status = ?, completed_at = ?
+                WHERE trace_id = ? AND status = 'running'""",
+                (status, _utc_now().isoformat(), trace_id),
+            )
+
     def get_run(self, run_id: str) -> dict[str, Any] | None:
         """Load a run and deserialize its optional result payloads."""
         row = self._fetch_one("SELECT * FROM runs WHERE id = ?", (run_id,))

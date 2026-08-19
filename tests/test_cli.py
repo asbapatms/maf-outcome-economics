@@ -18,6 +18,29 @@ from maf_outcome_economics.domain import TriageResult, WorkflowVariant
 from maf_outcome_economics.persistence import OutcomeRepository, seed_fictional_tickets
 
 
+def test_given_root_help_when_invoked_then_every_command_is_registered() -> None:
+    # Arrange
+    expected_commands = {
+        "agent-smoke-test",
+        "compare",
+        "decide",
+        "demo",
+        "health",
+        "init-db",
+        "run",
+        "seed",
+        "telemetry-smoke-test",
+        "trace",
+    }
+
+    # Act
+    result = CliRunner().invoke(app, ["--help"])
+
+    # Assert
+    assert result.exit_code == 0
+    assert all(command in result.stdout for command in expected_commands)
+
+
 def test_given_local_environment_when_health_runs_then_dependencies_are_reported() -> None:
     # Arrange
     runner = CliRunner()
@@ -141,6 +164,30 @@ def test_run_defaults_to_live_and_requires_azure_configuration(
     assert "LIVE MODE" in result.stdout
     assert "AZURE_OPENAI_ENDPOINT" in result.stdout
     assert "AZURE_OPENAI_CHAT_MODEL" in result.stdout
+
+
+def test_given_keyboard_interrupt_when_run_executes_then_returns_130(
+    tmp_path, mocker
+) -> None:
+    # Arrange
+    settings = Settings(
+        azure_openai_endpoint="https://example.openai.azure.com",
+        azure_openai_chat_model="test-deployment",
+        database_path=tmp_path / "cli.db",
+    )
+    mocker.patch("maf_outcome_economics.cli.Settings.from_env", return_value=settings)
+    mocker.patch.object(
+        ConsoleService,
+        "run_variant",
+        new=mocker.AsyncMock(side_effect=KeyboardInterrupt),
+    )
+
+    # Act
+    result = CliRunner().invoke(app, ["run", "--variant", "baseline"])
+
+    # Assert
+    assert result.exit_code == 130
+    assert "Run interrupted" in result.stdout
 
 
 async def test_live_run_rejects_missing_chat_usage_without_substitution(

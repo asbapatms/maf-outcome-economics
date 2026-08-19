@@ -1,5 +1,6 @@
 """Sequential Microsoft Agent Framework workflow for support tickets."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Never
 from uuid import uuid4
@@ -275,27 +276,38 @@ async def stream_ticket_workflow(
             "variant": request.variant.value,
         },
     ) as ticket_span:
-        workflow = create_ticket_workflow(repository, triage_agent, review_agent)
-        async for event in workflow.run(request, stream=True):
-            if event.type == "output" and isinstance(event.data, TicketWorkflowResult):
-                verification = event.data.verification
-                ticket_span.set_attributes(
-                    {
-                        "tokenomics.verification.accepted": verification.accepted,
-                        "tokenomics.verification.correction_required": (
-                            verification.correction_required
-                        ),
-                        "tokenomics.verification.quality_score": float(
-                            verification.quality_score
-                        ),
-                        "tokenomics.verification.critical_priority_expected": (
-                            verification.critical_priority_expected
-                        ),
-                    }
-                )
-                if verification.critical_priority_recalled is not None:
-                    ticket_span.set_attribute(
-                        "tokenomics.verification.critical_priority_recalled",
-                        verification.critical_priority_recalled,
+        trace_id = format(ticket_span.get_span_context().trace_id, "032x")
+        try:
+            workflow = create_ticket_workflow(repository, triage_agent, review_agent)
+            async for event in workflow.run(request, stream=True):
+                if event.type == "output" and isinstance(event.data, TicketWorkflowResult):
+                    verification = event.data.verification
+                    ticket_span.set_attributes(
+                        {
+                            "tokenomics.verification.accepted": verification.accepted,
+                            "tokenomics.verification.correction_required": (
+                                verification.correction_required
+                            ),
+                            "tokenomics.verification.quality_score": float(
+                                verification.quality_score
+                            ),
+                            "tokenomics.verification.critical_priority_expected": (
+                                verification.critical_priority_expected
+                            ),
+                        }
                     )
-            yield event
+                    if verification.critical_priority_recalled is not None:
+                        ticket_span.set_attribute(
+                            "tokenomics.verification.critical_priority_recalled",
+                            verification.critical_priority_recalled,
+                        )
+                yield event
+        except BaseException as error:
+            repository.terminate_run_by_trace(
+                trace_id,
+                interrupted=isinstance(
+                    error,
+                    (asyncio.CancelledError, KeyboardInterrupt, GeneratorExit),
+                ),
+            )
+            raise
