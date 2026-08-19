@@ -1,0 +1,116 @@
+"""Tests for Microsoft Agent Framework OpenTelemetry persistence."""
+
+
+from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExportResult
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import Status, StatusCode
+
+from maf_outcome_economics.persistence import OutcomeRepository
+from maf_outcome_economics.telemetry import MAFSpanNormalizer, SQLiteSpanExporter
+from maf_outcome_economics.telemetry import setup as telemetry_setup
+
+
+def _make_maf_chat_span() -> ReadableSpan:
+    provider = TracerProvider()
+    memory_exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(memory_exporter))
+    tracer = provider.get_tracer("telemetry-tests")
+    with tracer.start_as_current_span("workflow parent"), tracer.start_as_current_span(
+        "chat model call",
+        attributes={
+            "gen_ai.operation.name": "chat",
+            "gen_ai.provider.name": "illustrative-provider",
+            "gen_ai.request.model": "requested-model",
+            "gen_ai.response.model": "response-model",
+            "gen_ai.usage.input_tokens": 120,
+            "gen_ai.usage.output_tokens": 30,
+            "gen_ai.agent.id": "agent-001",
+            "gen_ai.agent.name": "Triage Agent",
+            "workflow.id": "workflow-001",
+            "session.id": "session-001",
+            "executor.id": "executor-001",
+            "message.source_id": "source-001",
+            "message.target_id": "target-001",
+            "error.type": "RateLimitError",
+            "gen_ai.input.messages": "sensitive prompt content",
+        },
+    ) as child_span:
+        child_span.set_status(Status(StatusCode.ERROR, "illustrative failure"))
+    provider.shutdown()
+    return next(
+        span for span in memory_exporter.get_finished_spans() if span.name == "chat model call"
+    )
+
+
+def test_normalizer_extracts_maf_attributes_without_sensitive_content() -> None:
+    normalized = MAFSpanNormalizer().normalize(_make_maf_chat_span())
+
+    assert normalized.input_tokens == 120
+    assert normalized.output_tokens == 30
+    assert normalized.agent_id == "agent-001"
+    assert normalized.agent_name == "Triage Agent"
+    assert normalized.request_model == "requested-model"
+    assert normalized.response_model == "response-model"
+    assert normalized.operation_name == "chat"
+    assert normalized.workflow_id == "workflow-001"
+    assert normalized.session_id == "session-001"
+    assert normalized.executor_id == "executor-001"
+    assert normalized.message_source == "source-001"
+    assert normalized.message_target == "target-001"
+    assert normalized.error_type == "RateLimitError"
+    assert normalized.parent_span_id is not None
+    assert normalized.status_code == "ERROR"
+    assert normalized.status_description == "illustrative failure"
+    assert "gen_ai.input.messages" not in normalized.attributes
+
+
+def test_exporter_persists_span_and_deduplicates_billable_chat_call(tmp_path) -> None:
+    database_path = tmp_path / "telemetry.db"
+    exporter = SQLiteSpanExporter(database_path)
+    readable_span = _make_maf_chat_span()
+
+    assert exporter.export([readable_span, readable_span]) is SpanExportResult.SUCCESS
+    assert exporter.export([readable_span]) is SpanExportResult.SUCCESS
+
+    repository = OutcomeRepository(database_path)
+    spans = repository.list_telemetry_spans()
+    billable_usage = repository.list_billable_model_usage()
+    assert len(spans) == 1
+    assert spans[0]["parent_span_id"] is not None
+    assert spans[0]["status_code"] == "ERROR"
+    assert spans[0]["started_at"]
+    assert spans[0]["ended_at"]
+    assert len(billable_usage) == 1
+    assert billable_usage[0]["input_tokens"] == 120
+    assert billable_usage[0]["output_tokens"] == 30
+    assert billable_usage[0]["agent_id"] == "agent-001"
+    assert billable_usage[0]["workflow_id"] == "workflow-001"
+
+
+def test_non_chat_span_is_not_billable(tmp_path) -> None:
+    provider = TracerProvider()
+    memory_exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(memory_exporter))
+    tracer = provider.get_tracer("telemetry-tests")
+    with tracer.start_as_current_span(
+        "workflow run",
+        attributes={"gen_ai.operation.name": "invoke_agent", "gen_ai.request.model": "model"},
+    ):
+        pass
+    provider.shutdown()
+
+    exporter = SQLiteSpanExporter(tmp_path / "telemetry.db")
+    assert exporter.export(memory_exporter.get_finished_spans()) is SpanExportResult.SUCCESS
+    assert OutcomeRepository(tmp_path / "telemetry.db").list_billable_model_usage() == []
+
+
+def test_configure_telemetry_disables_sensitive_capture(
+    tmp_path, mocker
+) -> None:
+    configure = mocker.patch.object(telemetry_setup, "configure_otel_providers")
+
+    exporter = telemetry_setup.configure_telemetry(tmp_path / "telemetry.db")
+
+    assert isinstance(exporter, SQLiteSpanExporter)
+    configure.assert_called_once_with(enable_sensitive_data=False, exporters=[exporter])
