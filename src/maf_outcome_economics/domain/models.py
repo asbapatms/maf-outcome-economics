@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 
 def utc_now() -> datetime:
@@ -118,6 +118,49 @@ class VerificationResult(DomainModel):
     verified_at: AwareDatetime = Field(default_factory=utc_now)
 
 
+class RoutingVerificationResult(VerificationResult):
+    """Deterministic field-level verification of final routing labels."""
+
+    category_correct: bool
+    priority_correct: bool
+    resolver_group_correct: bool
+    accepted: bool
+    correction_required: bool
+    quality_score: Decimal = Field(ge=0, le=1)
+    critical_priority_expected: bool
+    critical_priority_recalled: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_consistency(self) -> "RoutingVerificationResult":
+        """Reject contradictory correctness and acceptance values."""
+        all_correct = (
+            self.category_correct
+            and self.priority_correct
+            and self.resolver_group_correct
+        )
+        expected_score = Decimal(
+            sum(
+                (
+                    self.category_correct,
+                    self.priority_correct,
+                    self.resolver_group_correct,
+                )
+            )
+        ) / Decimal(3)
+        if self.accepted != all_correct or self.passed != all_correct:
+            raise ValueError("Acceptance and passed require all routing fields to match")
+        if self.correction_required == all_correct:
+            raise ValueError("correction_required must be the inverse of acceptance")
+        if self.quality_score != expected_score or self.observed_value != expected_score:
+            raise ValueError("Quality scores must equal the fraction of correct fields")
+        if self.critical_priority_expected:
+            if self.critical_priority_recalled is not self.priority_correct:
+                raise ValueError("Critical-priority recall must reflect priority correctness")
+        elif self.critical_priority_recalled is not None:
+            raise ValueError("Critical-priority recall applies only to critical gold labels")
+        return self
+
+
 class TicketWorkflowInput(DomainModel):
     """Business metadata and ticket supplied to one workflow run."""
 
@@ -139,7 +182,7 @@ class TicketWorkflowState(DomainModel):
     review: ReviewResult | None = None
     review_invoked: bool = False
     review_skip_reason: str | None = None
-    verification: VerificationResult | None = None
+    verification: RoutingVerificationResult | None = None
 
 
 class TicketWorkflowResult(DomainModel):
@@ -155,7 +198,7 @@ class TicketWorkflowResult(DomainModel):
     review: ReviewResult | None = None
     review_invoked: bool
     review_skip_reason: str | None = None
-    verification: VerificationResult
+    verification: RoutingVerificationResult
 
 
 class PricingRecord(DomainModel):

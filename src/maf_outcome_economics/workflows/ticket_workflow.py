@@ -1,7 +1,6 @@
 """Sequential Microsoft Agent Framework workflow for support tickets."""
 
 from collections.abc import AsyncIterator
-from decimal import Decimal
 from typing import Never
 from uuid import uuid4
 
@@ -23,10 +22,10 @@ from maf_outcome_economics.domain import (
     TicketWorkflowResult,
     TicketWorkflowState,
     TriageResult,
-    VerificationResult,
     WorkflowVariant,
 )
 from maf_outcome_economics.persistence import OutcomeRepository
+from maf_outcome_economics.verification import verify_routing_outcome
 
 LOW_CONFIDENCE_THRESHOLD = 0.8
 SENSITIVE_TERMS = frozenset(
@@ -172,21 +171,14 @@ class OutcomeVerifierExecutor(Executor):
             state.review,
         )
         ticket = state.request.ticket
-        matches = sum(
-            (
-                category == ticket.gold_category,
-                priority == ticket.gold_priority,
-                resolver_group == ticket.gold_resolver_group,
-            )
-        )
-        verification = VerificationResult(
-            id=f"verification-{state.run_id}",
+        verification = verify_routing_outcome(
+            verification_id=f"verification-{state.run_id}",
             contract_id=state.request.contract_id,
             run_id=state.run_id,
-            passed=matches == 3,
-            observed_value=Decimal(matches) / Decimal(3),
-            evidence_count=3,
-            reason=f"{matches} of 3 routing labels matched fictional gold labels.",
+            ticket=ticket,
+            final_category=category,
+            final_priority=priority,
+            final_resolver_group=resolver_group,
         )
         self.repository.save_verification(verification)
         await ctx.send_message(state.model_copy(update={"verification": verification}))
@@ -281,7 +273,28 @@ async def stream_ticket_workflow(
             "contract_id": request.contract_id,
             "variant": request.variant.value,
         },
-    ):
+    ) as ticket_span:
         workflow = create_ticket_workflow(repository, triage_agent, review_agent)
         async for event in workflow.run(request, stream=True):
+            if event.type == "output" and isinstance(event.data, TicketWorkflowResult):
+                verification = event.data.verification
+                ticket_span.set_attributes(
+                    {
+                        "tokenomics.verification.accepted": verification.accepted,
+                        "tokenomics.verification.correction_required": (
+                            verification.correction_required
+                        ),
+                        "tokenomics.verification.quality_score": float(
+                            verification.quality_score
+                        ),
+                        "tokenomics.verification.critical_priority_expected": (
+                            verification.critical_priority_expected
+                        ),
+                    }
+                )
+                if verification.critical_priority_recalled is not None:
+                    ticket_span.set_attribute(
+                        "tokenomics.verification.critical_priority_recalled",
+                        verification.critical_priority_recalled,
+                    )
             yield event

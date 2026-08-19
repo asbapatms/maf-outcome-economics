@@ -151,6 +151,13 @@ events stream and records `business_task_id`, `batch_id`, `contract_id`, and
 `variant` attributes. The run stores the same 32-character trace ID so SQLite
 spans and billable model usage can be associated with the business result.
 
+Outcome verification deterministically compares the final category, priority,
+and resolver group with the ticket-owned gold labels. Acceptance requires all
+three fields to match; review approval never determines correctness. Persisted
+results include per-field correctness, `correction_required`, a three-field
+quality score, and separate `P1` critical-priority recall. The parent span
+records only verification booleans and numeric quality, never ticket text.
+
 ## Telemetry
 
 `configure_telemetry()` passes `SQLiteSpanExporter` to Agent Framework's

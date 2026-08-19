@@ -141,17 +141,60 @@ async def test_given_baseline_when_streamed_then_both_agents_run_and_result_is_t
     # Assert
     assert isinstance(output, TicketWorkflowResult)
     assert output.review_invoked is True
+    assert output.verification.accepted is True
+    assert output.verification.correction_required is False
     triage_agent.run.assert_awaited_once()
     review_agent.run.assert_awaited_once()
     persisted = repository.get_run(output.run_id)
     assert persisted is not None
     assert persisted["trace_id"] == output.trace_id
+    assert repository.list_verifications("contract-routing") == [output.verification]
     parent = next(span for span in spans if span.name == "tokenomics.ticket")
     assert parent.attributes is not None
     assert parent.attributes["business_task_id"] == "task-001"
     assert parent.attributes["batch_id"] == "batch-001"
     assert parent.attributes["contract_id"] == "contract-routing"
     assert parent.attributes["variant"] == "baseline"
+    assert parent.attributes["tokenomics.verification.accepted"] is True
+    assert parent.attributes["tokenomics.verification.correction_required"] is False
+    assert parent.attributes["tokenomics.verification.quality_score"] == 1.0
+    assert request.ticket.subject not in parent.attributes.values()
+    assert request.ticket.description not in parent.attributes.values()
+
+
+@pytest.mark.asyncio
+async def test_given_review_approves_wrong_labels_when_verified_then_gold_labels_reject(
+    tmp_path,
+    mocker,
+) -> None:
+    # Arrange
+    repository = _repository(tmp_path)
+    triage_agent, review_agent = _agents(
+        mocker,
+        _triage(category="Network"),
+    )
+    request = TicketWorkflowInput(
+        ticket=_ticket(),
+        business_task_id="task-wrong-labels",
+        batch_id="batch-001",
+        contract_id="contract-routing",
+        variant=WorkflowVariant.BASELINE,
+    )
+
+    # Act
+    events, spans = await _stream(request, repository, triage_agent, review_agent)
+    output = next(event.data for event in events if event.type == "output")
+
+    # Assert
+    assert isinstance(output, TicketWorkflowResult)
+    assert output.review is not None
+    assert output.review.approved is True
+    assert output.verification.category_correct is False
+    assert output.verification.accepted is False
+    assert output.verification.correction_required is True
+    parent = next(span for span in spans if span.name == "tokenomics.ticket")
+    assert parent.attributes is not None
+    assert parent.attributes["tokenomics.verification.accepted"] is False
 
 
 @pytest.mark.asyncio

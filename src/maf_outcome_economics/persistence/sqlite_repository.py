@@ -14,6 +14,7 @@ from maf_outcome_economics.domain import (
     OutcomeContract,
     PricingRecord,
     ReviewResult,
+    RoutingVerificationResult,
     Ticket,
     TriageResult,
     Variant,
@@ -352,7 +353,16 @@ class OutcomeRepository:
         rows = self._fetch_all(
             "SELECT payload FROM verifications WHERE contract_id = ? ORDER BY id", (contract_id,)
         )
-        return [VerificationResult.model_validate_json(row["payload"]) for row in rows]
+        results: list[VerificationResult] = []
+        for row in rows:
+            payload = json.loads(row["payload"])
+            model = (
+                RoutingVerificationResult
+                if "category_correct" in payload
+                else VerificationResult
+            )
+            results.append(model.model_validate(payload))
+        return results
 
     def save_governance_decision(self, decision: GovernanceDecision) -> None:
         """Insert or replace a governance decision."""
