@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OutcomeMeter Governance Scenarios</title>
+    <style>
+:root{color-scheme:dark;--canvas:#101516;--panel:#182022;--alt:#1d282a;
+--line:#385055;--ink:#f2f6f4;--muted:#9eb0ae;--cyan:#44d7cf;
+--green:#7ae582;--amber:#ffca5c;--red:#ff6b6b}*{box-sizing:border-box}
+body{margin:0;background-color:var(--canvas);background-image:
+linear-gradient(rgba(68,215,207,.045) 1px,transparent 1px),
+linear-gradient(90deg,rgba(68,215,207,.045) 1px,transparent 1px);
+background-size:32px 32px;color:var(--ink);font-family:Bahnschrift,"Arial Narrow",sans-serif}
+main{width:1600px;min-height:1200px;padding:72px 82px 64px}header{display:grid;
+grid-template-columns:1fr auto;align-items:end;gap:40px;border-bottom:2px solid var(--cyan);
+padding-bottom:28px;margin-bottom:34px}.eyebrow{color:var(--cyan);font:700 20px/1.2
+"Cascadia Mono",Consolas,monospace;text-transform:uppercase}h1{margin:8px 0 10px;
+font-size:62px;line-height:1}.subtitle{margin:0;color:var(--muted);font-size:25px}
+.mode{border:1px solid;padding:13px 18px;font:700 20px/1 "Cascadia Mono",Consolas,monospace;
+text-transform:uppercase}.mode.live{color:var(--green)}.mode.fake{color:var(--amber)}
+.question{background:var(--alt);border-left:7px solid var(--cyan);padding:24px 28px;
+margin-bottom:28px;font-size:29px}.question strong{color:var(--cyan)}
+.experiment{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:28px}
+.experiment article{background:var(--panel);border:1px solid var(--line);padding:24px 26px}
+.experiment article.optimized{border-color:var(--green)}
+h2,.section-title{margin:0 0 10px;font-size:26px;color:var(--cyan)}.optimized h2{color:var(--green)}
+.experiment p{margin:0;color:var(--muted);font-size:21px;line-height:1.45}
+.terminal{background:#0b0f10;
+border:1px solid var(--line);padding:24px 26px;margin-bottom:28px;font:19px/1.55
+"Cascadia Mono",Consolas,monospace}.terminal-head{display:flex;justify-content:space-between;
+color:var(--muted);border-bottom:1px solid #293538;padding-bottom:13px;margin-bottom:14px}
+.terminal-line{white-space:nowrap}.prompt{color:var(--cyan)}.accepted-yes{color:var(--green)}
+.accepted-no{color:var(--red)}.review-skipped{color:var(--amber)}.trace{color:#7fb8ff}
+.muted{color:var(--muted)}
+.results{display:grid;grid-template-columns:1.18fr .82fr;gap:24px;margin-bottom:28px}
+table{width:100%;
+border-collapse:collapse;background:var(--panel);font:20px/1.3 "Cascadia Mono",Consolas,monospace}
+caption{text-align:left;color:var(--cyan);font:700 26px/1.2 Bahnschrift,sans-serif;
+padding-bottom:12px}
+th,td{padding:13px 16px;border-bottom:1px solid var(--line);text-align:right}th:first-child,
+td:first-child{text-align:left}th{color:var(--muted);font-weight:400}
+.optimized-value{color:var(--green)}
+.impact{display:grid;grid-template-columns:1fr 1fr;gap:14px}.metric{background:var(--alt);
+border-top:4px solid var(--green);padding:18px;min-height:118px}.metric .value{color:var(--green);
+font:700 38px/1 "Cascadia Mono",Consolas,monospace}.metric .label{display:block;margin-top:10px;
+color:var(--muted);font-size:18px}.governance{display:grid;grid-template-columns:240px 1fr;
+gap:28px;align-items:center;border:2px solid;padding:26px 30px}
+.governance.green{background:#142219;border-color:var(--green)}
+.governance.amber{background:#282216;border-color:var(--amber)}
+.governance.red{background:#28191a;border-color:var(--red)}
+.decision{font:700 54px/1 "Cascadia Mono",Consolas,monospace;text-align:center}
+.green .decision,.green h2{color:var(--green)}.amber .decision,.amber h2{color:var(--amber)}
+.red .decision,.red h2{color:var(--red)}.governance p{margin:0;font-size:22px;line-height:1.4}
+.recommendation{margin-top:8px!important;color:var(--muted)}.audit{margin-top:8px;color:var(--muted);
+font:17px/1.3 "Cascadia Mono",Consolas,monospace}footer{display:flex;justify-content:space-between;
+margin-top:24px;color:var(--muted);font:17px/1.3 "Cascadia Mono",Consolas,monospace}
+
+.scenario-index{min-height:980px}.scenario-index h1{font-size:52px}
+.scenario-intro{font-size:25px;line-height:1.4;color:var(--muted);margin-bottom:32px;
+max-width:1180px}.scenario-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.scenario-card{background:var(--panel);border:2px solid;padding:28px;min-height:570px;
+display:flex;flex-direction:column}.scenario-card.green{border-color:var(--green)}
+.scenario-card.amber{border-color:var(--amber)}.scenario-card.red{border-color:var(--red)}
+.scenario-name{color:var(--muted);font:700 18px/1.2 "Cascadia Mono",Consolas,monospace}
+.scenario-decision{font:700 52px/1 "Cascadia Mono",Consolas,monospace;margin:24px 0 30px}
+.scenario-card.green .scenario-decision{color:var(--green)}
+.scenario-card.amber .scenario-decision{color:var(--amber)}
+.scenario-card.red .scenario-decision{color:var(--red)}dl{margin:0}dl div{display:flex;
+justify-content:space-between;border-bottom:1px solid var(--line);padding:15px 0;font-size:20px}
+dt{color:var(--muted)}dd{margin:0;font-family:"Cascadia Mono",Consolas,monospace}
+.scenario-card p{font-size:20px;line-height:1.45;color:var(--muted);flex:1;margin:26px 0}
+.scenario-card a{color:var(--cyan);font:700 18px/1.2 "Cascadia Mono",Consolas,monospace}
+</style>
+</head>
+<body>
+    <main class="scenario-index">
+        <header>
+            <div>
+                <div class="eyebrow">Microsoft Agent Framework · Outcome Economics</div>
+                <h1>Three Outcomes. One Governance Engine.</h1>
+                <p class="subtitle">Isolated fictional datasets exercise every
+                    deterministic action.</p>
+            </div>
+            <div class="mode fake">● Rehearsal mode</div>
+        </header>
+        <section class="scenario-intro">Each result is calculated from verified
+            quality, critical recall, and cost per accepted outcome. The action is
+            never hard-coded.</section>
+        <section class="scenario-grid"><article class="scenario-card green">
+    <div class="scenario-name">SCALE DATASET</div>
+    <div class="scenario-decision">SCALE</div>
+    <dl>
+        <div><dt>Quality</dt><dd>100.0%</dd></div>
+        <div><dt>Critical recall</dt><dd>100.0%</dd></div>
+        <div><dt>Cost / accepted</dt><dd>$0.000600</dd></div>
+        <div><dt>Approved budget</dt><dd>$0.050000</dd></div>
+    </dl>
+    <p>Quality, safety, and unit-cost gates passed.</p>
+    <a href="demo-scale.html">Open detailed evidence</a>
+</article><article class="scenario-card amber">
+    <div class="scenario-name">OPTIMIZE DATASET</div>
+    <div class="scenario-decision">OPTIMIZE</div>
+    <dl>
+        <div><dt>Quality</dt><dd>100.0%</dd></div>
+        <div><dt>Critical recall</dt><dd>100.0%</dd></div>
+        <div><dt>Cost / accepted</dt><dd>$0.000600</dd></div>
+        <div><dt>Approved budget</dt><dd>$0.000100</dd></div>
+    </dl>
+    <p>Quality passed, but cost per accepted outcome exceeds budget.</p>
+    <a href="demo-optimize.html">Open detailed evidence</a>
+</article><article class="scenario-card red">
+    <div class="scenario-name">STOP DATASET</div>
+    <div class="scenario-decision">STOP</div>
+    <dl>
+        <div><dt>Quality</dt><dd>0.0%</dd></div>
+        <div><dt>Critical recall</dt><dd>0.0%</dd></div>
+        <div><dt>Cost / accepted</dt><dd>n/a</dd></div>
+        <div><dt>Approved budget</dt><dd>$0.050000</dd></div>
+    </dl>
+    <p>No outcomes passed deterministic verification. The verified acceptance rate is below the contract minimum. Average deterministic quality is below the contract minimum. Critical-priority recall is below the safety threshold.</p>
+    <a href="demo-stop.html">Open detailed evidence</a>
+</article></section>
+        <footer><span>Fictional tickets · deterministic hidden-label verification</span>
+            <span>Captured 2026-08-19 17:38 UTC</span></footer>
+    </main>
+</body>
+</html>

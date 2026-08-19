@@ -25,7 +25,7 @@ from maf_outcome_economics.console_service import (
     TicketProgress,
     VariantReport,
 )
-from maf_outcome_economics.demo_report import write_demo_report
+from maf_outcome_economics.demo_report import write_demo_report, write_scenario_index
 from maf_outcome_economics.domain import (
     GovernanceAction,
     GovernanceDecision,
@@ -37,7 +37,9 @@ from maf_outcome_economics.domain import (
 )
 from maf_outcome_economics.persistence import (
     FICTIONAL_TICKETS,
+    DemoScenario,
     OutcomeRepository,
+    seed_demo_scenario,
     seed_fictional_tickets,
 )
 from maf_outcome_economics.telemetry import configure_telemetry
@@ -122,7 +124,8 @@ def seed(
 def _provider_panel(provider: ConsoleProvider, settings: Settings) -> Panel:
     telemetry_destination = (
         "SQLite + Application Insights"
-        if settings.applicationinsights_configured
+        if provider is ConsoleProvider.LIVE
+        and settings.applicationinsights_configured
         else "SQLite only"
     )
     if provider is ConsoleProvider.FAKE:
@@ -379,6 +382,90 @@ async def _run_demo_variants(
     return reports, service.decide(WorkflowVariant.OPTIMIZED), progress_events
 
 
+def _execute_demo(
+    settings: Settings,
+    limit: int,
+    provider: ConsoleProvider,
+    html_output: Path,
+    scenario: DemoScenario | None = None,
+) -> tuple[list[VariantReport], GovernanceDecision]:
+    repository = OutcomeRepository(settings.database_path)
+    if scenario is None:
+        seed_fictional_tickets(repository)
+    else:
+        seed_demo_scenario(repository, scenario)
+    if not repository.list_pricing():
+        repository.save_pricing(
+            PricingRecord(
+                id="pricing:illustrative-provider:illustrative-model",
+                provider="illustrative-provider",
+                model="illustrative-model",
+                input_cost_per_million_tokens=Decimal("2.50"),
+                output_cost_per_million_tokens=Decimal("10.00"),
+            )
+        )
+    console.print(_provider_panel(provider, settings))
+    if scenario is not None:
+        console.print(
+            Panel(
+                f"Fictional evidence designed to exercise the "
+                f"{scenario.value.upper()} governance path. The deterministic "
+                "engine still calculates the action from quality, safety, and cost.",
+                title=f"Scenario Dataset: {scenario.value.upper()}",
+                border_style="cyan",
+            )
+        )
+    console.print(_demo_intro_panel(limit, provider))
+    service = ConsoleService(settings)
+    reports, decision, progress_events = asyncio.run(
+        _run_demo_variants(service, limit, provider)
+    )
+    console.print(_comparison_table(reports))
+    console.print(_outcome_panel(reports, decision))
+    console.print(_decision_panel(decision))
+    report_path = write_demo_report(
+        html_output,
+        reports,
+        decision,
+        provider,
+        progress_events,
+        limit,
+    )
+    console.print(f"[bold green]HTML report:[/bold green] {report_path}")
+    return reports, decision
+
+
+def _scenario_summary(
+    results: list[tuple[DemoScenario, VariantReport, GovernanceDecision, Path]],
+) -> Table:
+    table = Table(title="All Three Governance Outcomes")
+    table.add_column("Dataset")
+    table.add_column("Quality", justify="right")
+    table.add_column("Critical recall", justify="right")
+    table.add_column("Cost / accepted", justify="right")
+    table.add_column("Budget", justify="right")
+    table.add_column("Decision")
+    table.add_column("HTML report")
+    for scenario, report, decision, report_path in results:
+        cost = report.economics.cost_per_accepted_outcome
+        evidence = decision.evidence_metrics
+        budget = (
+            evidence.maximum_cost_per_accepted_outcome
+            if evidence is not None
+            else None
+        )
+        table.add_row(
+            scenario.value.upper(),
+            f"{report.average_quality:.1%}",
+            f"{report.critical_priority_recall:.1%}",
+            f"{cost:.6f}" if cost is not None else "n/a",
+            f"{budget:.6f}" if budget is not None else "n/a",
+            decision.action.value.upper(),
+            str(report_path),
+        )
+    return table
+
+
 @app.command("run")
 def run_workflow(
     variant: Annotated[WorkflowVariant, typer.Option(help="Workflow variant to run.")],
@@ -488,27 +575,35 @@ def demo(
             help="Self-contained HTML report written after each successful demo."
         ),
     ] = Path("artifacts/hackathon-live-demo.html"),
+    scenario: Annotated[
+        DemoScenario | None,
+        typer.Option(
+            help="Use an isolated rehearsal dataset for a governance outcome."
+        ),
+    ] = None,
 ) -> None:
     """Run both variants and render console plus HTML economics evidence."""
     settings = Settings.from_env()
-    repository = OutcomeRepository(settings.database_path)
-    seed_fictional_tickets(repository)
-    if not repository.list_pricing():
-        repository.save_pricing(
-            PricingRecord(
-                id="pricing:illustrative-provider:illustrative-model",
-                provider="illustrative-provider",
-                model="illustrative-model",
-                input_cost_per_million_tokens=Decimal("2.50"),
-                output_cost_per_million_tokens=Decimal("10.00"),
+    if scenario is not None:
+        if provider is not ConsoleProvider.FAKE:
+            console.print(
+                "[red]Scenario datasets require --provider fake so the expected "
+                "governance path is reproducible.[/red]"
             )
-        )
-    console.print(_provider_panel(provider, settings))
-    console.print(_demo_intro_panel(limit, provider))
-    service = ConsoleService(settings)
+            raise typer.Exit(code=2)
+        scenario_path = Path("data") / f"demo-{scenario.value}.db"
+        scenario_path.unlink(missing_ok=True)
+        settings = settings.model_copy(update={"database_path": scenario_path})
+        limit = min(limit, 3)
+        if html_output == Path("artifacts/hackathon-live-demo.html"):
+            html_output = Path("artifacts") / f"demo-{scenario.value}.html"
     try:
-        reports, decision, progress_events = asyncio.run(
-            _run_demo_variants(service, limit, provider)
+        _execute_demo(
+            settings,
+            limit,
+            provider,
+            html_output,
+            scenario,
         )
     except ConsoleSetupError as error:
         console.print(f"[red]Demo setup error:[/red] {error}")
@@ -519,22 +614,50 @@ def demo(
     except Exception as error:
         console.print(f"[red]Demo failed:[/red] {error}")
         raise typer.Exit(code=1) from error
-    console.print(_comparison_table(reports))
-    console.print(_outcome_panel(reports, decision))
-    console.print(_decision_panel(decision))
+
+
+@app.command("demo-scenarios")
+def demo_scenarios() -> None:
+    """Run isolated fictional datasets for SCALE, OPTIMIZE, and STOP."""
+    base_settings = Settings.from_env()
+    results: list[
+        tuple[DemoScenario, VariantReport, GovernanceDecision, Path]
+    ] = []
     try:
-        report_path = write_demo_report(
-            html_output,
-            reports,
-            decision,
-            provider,
-            progress_events,
-            limit,
-        )
-    except OSError as error:
-        console.print(f"[red]HTML report failed:[/red] {error}")
+        for scenario in DemoScenario:
+            database_path = Path("data") / f"demo-{scenario.value}.db"
+            database_path.unlink(missing_ok=True)
+            html_output = Path("artifacts") / f"demo-{scenario.value}.html"
+            settings = base_settings.model_copy(update={"database_path": database_path})
+            console.rule(f"[bold]{scenario.value.upper()} DATASET[/bold]")
+            reports, decision = _execute_demo(
+                settings,
+                3,
+                ConsoleProvider.FAKE,
+                html_output,
+                scenario,
+            )
+            optimized = next(
+                report
+                for report in reports
+                if report.variant is WorkflowVariant.OPTIMIZED
+            )
+            results.append((scenario, optimized, decision, html_output.resolve()))
+    except KeyboardInterrupt as error:
+        console.print("[yellow]Scenario demo interrupted.[/yellow]")
+        raise typer.Exit(code=130) from error
+    except Exception as error:
+        console.print(f"[red]Scenario demo failed:[/red] {error}")
         raise typer.Exit(code=1) from error
-    console.print(f"[bold green]HTML report:[/bold green] {report_path}")
+    console.print(_scenario_summary(results))
+    index_path = write_scenario_index(
+        Path("artifacts/demo-scenarios.html"),
+        [
+            (scenario.value, report, decision, report_path)
+            for scenario, report, decision, report_path in results
+        ],
+    )
+    console.print(f"[bold green]Scenario index:[/bold green] {index_path}")
 
 
 @app.command("telemetry-smoke-test")

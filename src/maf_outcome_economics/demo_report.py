@@ -71,6 +71,78 @@ def write_demo_report(
     return resolved_path
 
 
+def write_scenario_index(
+    output_path: Path,
+    results: list[tuple[str, VariantReport, GovernanceDecision, Path]],
+) -> Path:
+    """Write a combined HTML index for all governance scenario outcomes."""
+    cards = []
+    for scenario, report, decision, detail_path in results:
+        cost = report.economics.cost_per_accepted_outcome
+        evidence = decision.evidence_metrics
+        budget = (
+            evidence.maximum_cost_per_accepted_outcome
+            if evidence is not None
+            else None
+        )
+        color = {
+            GovernanceAction.SCALE: "green",
+            GovernanceAction.OPTIMIZE: "amber",
+            GovernanceAction.STOP: "red",
+        }.get(decision.action, "amber")
+        reasons = " ".join(
+            _REASON_EXPLANATIONS[code] for code in decision.reason_codes
+        )
+        cards.append(
+            f"""<article class="scenario-card {color}">
+    <div class="scenario-name">{escape(scenario.upper())} DATASET</div>
+    <div class="scenario-decision">{decision.action.value.upper()}</div>
+    <dl>
+        <div><dt>Quality</dt><dd>{_percent(report.average_quality)}</dd></div>
+        <div><dt>Critical recall</dt><dd>{_percent(report.critical_priority_recall)}</dd></div>
+        <div><dt>Cost / accepted</dt><dd>{_money(cost)}</dd></div>
+        <div><dt>Approved budget</dt><dd>{_money(budget)}</dd></div>
+    </dl>
+    <p>{escape(reasons)}</p>
+    <a href="{escape(detail_path.name)}">Open detailed evidence</a>
+</article>"""
+        )
+    captured_at = datetime.now(UTC)
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OutcomeMeter Governance Scenarios</title>
+    <style>{_STYLES}{_SCENARIO_INDEX_STYLES}</style>
+</head>
+<body>
+    <main class="scenario-index">
+        <header>
+            <div>
+                <div class="eyebrow">Microsoft Agent Framework · Outcome Economics</div>
+                <h1>Three Outcomes. One Governance Engine.</h1>
+                <p class="subtitle">Isolated fictional datasets exercise every
+                    deterministic action.</p>
+            </div>
+            <div class="mode fake">● Rehearsal mode</div>
+        </header>
+        <section class="scenario-intro">Each result is calculated from verified
+            quality, critical recall, and cost per accepted outcome. The action is
+            never hard-coded.</section>
+        <section class="scenario-grid">{"".join(cards)}</section>
+        <footer><span>Fictional tickets · deterministic hidden-label verification</span>
+            <span>Captured {captured_at:%Y-%m-%d %H:%M UTC}</span></footer>
+    </main>
+</body>
+</html>
+"""
+    resolved_path = output_path.resolve()
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_path.write_text(html, encoding="utf-8")
+    return resolved_path
+
+
 def _render_page(
     baseline: VariantReport,
     optimized: VariantReport,
@@ -323,4 +395,22 @@ gap:28px;align-items:center;border:2px solid;padding:26px 30px}
 .recommendation{margin-top:8px!important;color:var(--muted)}.audit{margin-top:8px;color:var(--muted);
 font:17px/1.3 "Cascadia Mono",Consolas,monospace}footer{display:flex;justify-content:space-between;
 margin-top:24px;color:var(--muted);font:17px/1.3 "Cascadia Mono",Consolas,monospace}
+"""
+
+_SCENARIO_INDEX_STYLES = """
+.scenario-index{min-height:980px}.scenario-index h1{font-size:52px}
+.scenario-intro{font-size:25px;line-height:1.4;color:var(--muted);margin-bottom:32px;
+max-width:1180px}.scenario-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.scenario-card{background:var(--panel);border:2px solid;padding:28px;min-height:570px;
+display:flex;flex-direction:column}.scenario-card.green{border-color:var(--green)}
+.scenario-card.amber{border-color:var(--amber)}.scenario-card.red{border-color:var(--red)}
+.scenario-name{color:var(--muted);font:700 18px/1.2 "Cascadia Mono",Consolas,monospace}
+.scenario-decision{font:700 52px/1 "Cascadia Mono",Consolas,monospace;margin:24px 0 30px}
+.scenario-card.green .scenario-decision{color:var(--green)}
+.scenario-card.amber .scenario-decision{color:var(--amber)}
+.scenario-card.red .scenario-decision{color:var(--red)}dl{margin:0}dl div{display:flex;
+justify-content:space-between;border-bottom:1px solid var(--line);padding:15px 0;font-size:20px}
+dt{color:var(--muted)}dd{margin:0;font-family:"Cascadia Mono",Consolas,monospace}
+.scenario-card p{font-size:20px;line-height:1.45;color:var(--muted);flex:1;margin:26px 0}
+.scenario-card a{color:var(--cyan);font:700 18px/1.2 "Cascadia Mono",Consolas,monospace}
 """

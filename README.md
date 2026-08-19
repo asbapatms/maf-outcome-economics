@@ -151,6 +151,37 @@ uv run maf-outcome-economics demo --provider fake --limit 2 `
     --html-output artifacts/rehearsal-demo.html
 ```
 
+### Three governance scenario datasets
+
+Run three isolated fictional datasets to demonstrate every governance action:
+
+```powershell
+uv run maf-outcome-economics demo-scenarios
+```
+
+The command uses deterministic rehearsal agents and ends with one summary table:
+
+* `SCALE` has passing quality, safety, and unit cost
+* `OPTIMIZE` passes quality and safety but exceeds its scenario unit-cost budget
+* `STOP` intentionally fails hidden-label quality and critical-recall gates
+
+The actions are calculated by the same governance engine used elsewhere. They
+are not assigned directly by the scenario command. Each dataset uses three
+fictional tickets in a dedicated SQLite database, so prior runs cannot alter the
+result. Open `artifacts/demo-scenarios.html` for the combined browser view or
+the linked `demo-scale.html`, `demo-optimize.html`, and `demo-stop.html` pages
+for detailed evidence.
+
+Run one scenario by itself when recording a focused explanation:
+
+```powershell
+uv run maf-outcome-economics demo --provider fake --scenario optimize
+```
+
+Scenario datasets require `--provider fake` to preserve reproducibility. Live
+model runs remain evidence-driven and can return any action their measured
+quality, safety, and cost support.
+
 For live economics, seed a pricing record whose provider and model labels match
 the normalized Azure OpenAI chat spans. Seeded values remain estimates and
 must be supplied from an approved pricing source.

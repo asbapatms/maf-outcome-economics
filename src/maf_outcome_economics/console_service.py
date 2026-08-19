@@ -103,7 +103,10 @@ class ConsoleService:
             raise ConsoleSetupError("Outcome contract missing. Run the seed command first.")
 
         if not self._telemetry_configured:
-            configure_telemetry(self.settings.database_path)
+            configure_telemetry(
+                self.settings.database_path,
+                enable_application_insights=provider is ConsoleProvider.LIVE,
+            )
             self._telemetry_configured = True
         if provider is ConsoleProvider.LIVE:
             suite = create_support_agent_suite(self.settings)

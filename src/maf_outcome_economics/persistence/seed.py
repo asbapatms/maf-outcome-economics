@@ -1,6 +1,7 @@
 """Fictional seed data for local development and demonstrations."""
 
 from decimal import Decimal
+from enum import StrEnum
 
 from maf_outcome_economics.domain import (
     OutcomeContract,
@@ -176,12 +177,105 @@ FICTIONAL_TICKETS = [
 ]
 
 
+class DemoScenario(StrEnum):
+    """Deterministic rehearsal scenario with an expected governance action."""
+
+    SCALE = "scale"
+    OPTIMIZE = "optimize"
+    STOP = "stop"
+
+
+DEMO_SCENARIO_TICKETS = {
+    DemoScenario.SCALE: [
+        Ticket(
+            id="SCALE-001",
+            subject="Duplicate invoice for training subscription",
+            description="A fictional customer reports a duplicate training invoice.",
+            gold_category="Billing",
+            gold_priority="P3",
+            gold_resolver_group="Billing Support",
+        ),
+        Ticket(
+            id="SCALE-002",
+            subject="Monthly analytics export unavailable",
+            description="A fictional analyst cannot export a monthly report.",
+            gold_category="Application",
+            gold_priority="P2",
+            gold_resolver_group="Business Applications",
+        ),
+        Ticket(
+            id="SCALE-003",
+            subject="New employee software request pending",
+            description="A fictional onboarding software request remains pending.",
+            gold_category="Service request",
+            gold_priority="P4",
+            gold_resolver_group="Service Desk",
+        ),
+    ],
+    DemoScenario.OPTIMIZE: [
+        Ticket(
+            id="OPTIMIZE-001",
+            subject="Shared mailbox access request",
+            description="A fictional user cannot open an assigned shared mailbox.",
+            gold_category="Identity and access",
+            gold_priority="P3",
+            gold_resolver_group="Messaging Support",
+        ),
+        Ticket(
+            id="OPTIMIZE-002",
+            subject="Refund status unavailable",
+            description="A fictional customer cannot view an approved refund status.",
+            gold_category="Billing",
+            gold_priority="P4",
+            gold_resolver_group="Billing Support",
+        ),
+        Ticket(
+            id="OPTIMIZE-003",
+            subject="Office printer produces blank pages",
+            description="A fictional printer accepts jobs but prints blank pages.",
+            gold_category="Hardware",
+            gold_priority="P4",
+            gold_resolver_group="Workplace Technology",
+        ),
+    ],
+    DemoScenario.STOP: [
+        Ticket(
+            id="STOP-001",
+            subject="Regional checkout service outage",
+            description="A fictional checkout service is unavailable in one region.",
+            gold_category="Service availability",
+            gold_priority="P1",
+            gold_resolver_group="Cloud Reliability",
+        ),
+        Ticket(
+            id="STOP-002",
+            subject="Production database capacity alert",
+            description="A fictional production database exceeds safe capacity.",
+            gold_category="Database",
+            gold_priority="P1",
+            gold_resolver_group="Database Reliability",
+        ),
+        Ticket(
+            id="STOP-003",
+            subject="Backup missed recovery objective",
+            description="A fictional backup completed outside its recovery objective.",
+            gold_category="Data protection",
+            gold_priority="P1",
+            gold_resolver_group="Backup Operations",
+        ),
+    ],
+}
+
+
 def contract_id_for_variant(variant: WorkflowVariant) -> str:
     """Return the stable seeded contract identifier for a workflow variant."""
     return f"contract-{variant.value}"
 
 
-def seeded_contract(variant: WorkflowVariant) -> OutcomeContract:
+def seeded_contract(
+    variant: WorkflowVariant,
+    scenario: DemoScenario | None = None,
+) -> OutcomeContract:
     """Build the governance contract for a workflow variant."""
     return OutcomeContract(
         id=contract_id_for_variant(variant),
@@ -200,7 +294,11 @@ def seeded_contract(variant: WorkflowVariant) -> OutcomeContract:
         minimum_acceptance_rate=Decimal("0.80"),
         minimum_quality_score=Decimal("0.90"),
         minimum_critical_priority_recall=Decimal("1"),
-        maximum_cost_per_accepted_outcome=Decimal("0.05"),
+        maximum_cost_per_accepted_outcome=(
+            Decimal("0.0001")
+            if scenario is DemoScenario.OPTIMIZE
+            else Decimal("0.05")
+        ),
     )
 
 
@@ -211,3 +309,16 @@ def seed_fictional_tickets(repository: OutcomeRepository) -> int:
     for variant in WorkflowVariant:
         repository.save_outcome_contract(seeded_contract(variant))
     return len(FICTIONAL_TICKETS)
+
+
+def seed_demo_scenario(
+    repository: OutcomeRepository,
+    scenario: DemoScenario,
+) -> int:
+    """Seed one isolated fictional dataset and its governance contracts."""
+    tickets = DEMO_SCENARIO_TICKETS[scenario]
+    for ticket in tickets:
+        repository.save_ticket(ticket)
+    for variant in WorkflowVariant:
+        repository.save_outcome_contract(seeded_contract(variant, scenario))
+    return len(tickets)

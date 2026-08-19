@@ -25,6 +25,7 @@ def test_given_root_help_when_invoked_then_every_command_is_registered() -> None
         "compare",
         "decide",
         "demo",
+        "demo-scenarios",
         "health",
         "init-db",
         "run",
@@ -355,3 +356,35 @@ def test_demo_runs_both_variants_with_trace_tokens_and_governance(
     assert "Illustrative rehearsal telemetry" in html
     assert "TKT-001" in html
     assert "thresholds_met" in html
+
+
+def test_given_three_datasets_when_demo_scenarios_runs_then_all_actions_render(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.chdir(tmp_path)
+
+    # Act
+    result = CliRunner().invoke(app, ["demo-scenarios"])
+
+    # Assert
+    assert result.exit_code == 0
+    assert "All Three Governance Outcomes" in result.stdout
+    for scenario, decision in (
+        ("SCALE", "SCALE"),
+        ("OPTIMIZE", "OPTIMIZE"),
+        ("STOP", "STOP"),
+    ):
+        assert f"{scenario} DATASET" in result.stdout
+        detail = tmp_path / "artifacts" / f"demo-{scenario.lower()}.html"
+        assert detail.exists()
+        assert f">{decision}<" in detail.read_text(encoding="utf-8")
+    index = tmp_path / "artifacts" / "demo-scenarios.html"
+    assert index.exists()
+    index_html = index.read_text(encoding="utf-8")
+    assert "Three Outcomes. One Governance Engine." in index_html
+    assert "demo-scale.html" in index_html
+    assert "demo-optimize.html" in index_html
+    assert "demo-stop.html" in index_html
+    assert "$0.000100" in index_html

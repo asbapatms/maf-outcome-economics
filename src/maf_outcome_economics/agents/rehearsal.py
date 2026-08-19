@@ -21,6 +21,16 @@ class RehearsalTriageAgent:
     ) -> TriageResult:
         """Return a schema-valid deterministic triage result."""
         del profile
+        if ticket.id.startswith("STOP-"):
+            return TriageResult(
+                run_id=run_id,
+                ticket_id=ticket.id,
+                category="Service request",
+                priority="P3",
+                resolver_group="Service Desk",
+                confidence=0.95,
+                rationale="Intentional mismatch for deterministic STOP rehearsal.",
+            )
         return TriageResult(
             run_id=run_id,
             ticket_id=ticket.id,

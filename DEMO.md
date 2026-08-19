@@ -106,3 +106,16 @@ call:
 ```powershell
 uv run maf-outcome-economics decide --variant optimized
 ```
+
+## Optional: Show Every Governance Action
+
+Use the deterministic fictional scenario suite when the video needs to explain
+all three governance outcomes in one sequence:
+
+```powershell
+uv run maf-outcome-economics demo-scenarios
+```
+
+The final table shows `SCALE`, `OPTIMIZE`, and `STOP`. Open
+`artifacts/demo-scenarios.html` to present the same three outcomes as a single
+browser page, with links to each dataset's detailed evidence.

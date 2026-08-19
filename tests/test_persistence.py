@@ -4,6 +4,8 @@ import sqlite3
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import pytest
+
 from maf_outcome_economics.domain import (
     EconomicAssessment,
     GovernanceAction,
@@ -16,8 +18,16 @@ from maf_outcome_economics.domain import (
     TriageResult,
     Variant,
     VerificationResult,
+    WorkflowVariant,
 )
-from maf_outcome_economics.persistence import OutcomeRepository, seed_fictional_tickets
+from maf_outcome_economics.persistence import (
+    DEMO_SCENARIO_TICKETS,
+    DemoScenario,
+    OutcomeRepository,
+    contract_id_for_variant,
+    seed_demo_scenario,
+    seed_fictional_tickets,
+)
 
 
 def test_given_assessment_when_saved_then_it_can_be_loaded(tmp_path) -> None:
@@ -93,6 +103,32 @@ def test_seed_inserts_twenty_fictional_labeled_tickets_idempotently(tmp_path) ->
     assert all(ticket.gold_category for ticket in tickets)
     assert all(ticket.gold_priority.startswith("P") for ticket in tickets)
     assert all(ticket.gold_resolver_group for ticket in tickets)
+
+
+@pytest.mark.parametrize("scenario", list(DemoScenario))
+def test_given_demo_scenario_when_seeded_then_dataset_and_budget_are_isolated(
+    tmp_path,
+    scenario: DemoScenario,
+) -> None:
+    # Arrange
+    repository = OutcomeRepository(tmp_path / f"{scenario.value}.db")
+
+    # Act
+    count = seed_demo_scenario(repository, scenario)
+
+    # Assert
+    assert count == 3
+    assert repository.list_tickets() == DEMO_SCENARIO_TICKETS[scenario]
+    contract = repository.get_outcome_contract(
+        contract_id_for_variant(WorkflowVariant.OPTIMIZED)
+    )
+    assert contract is not None
+    expected_budget = (
+        Decimal("0.0001")
+        if scenario is DemoScenario.OPTIMIZE
+        else Decimal("0.05")
+    )
+    assert contract.maximum_cost_per_accepted_outcome == expected_budget
 
 
 def test_contract_pricing_verification_and_governance_round_trip(tmp_path) -> None:
