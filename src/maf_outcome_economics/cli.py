@@ -25,27 +25,39 @@ from maf_outcome_economics.console_service import (
     TicketProgress,
     VariantReport,
 )
+from maf_outcome_economics.core import (
+    GenericGovernanceAction,
+    GenericGovernanceDecision,
+)
 from maf_outcome_economics.demo_report import write_demo_report, write_scenario_index
 from maf_outcome_economics.domain import (
     GovernanceAction,
     GovernanceDecision,
     GovernanceReasonCode,
     PricingRecord,
+)
+from maf_outcome_economics.persistence import OutcomeRepository
+from maf_outcome_economics.scenarios import (
+    SCENARIO_CATALOG,
+    InvoiceProcessingScenario,
+    ScenarioId,
+)
+from maf_outcome_economics.scenarios.invoice import InvoiceScenarioResult
+from maf_outcome_economics.scenarios.ticket import (
+    FICTIONAL_TICKETS,
+    DemoScenario,
+    TicketGenericAnalysis,
+    TicketScenario,
     TicketWorkflowResult,
     TriageResult,
     WorkflowVariant,
-)
-from maf_outcome_economics.persistence import (
-    FICTIONAL_TICKETS,
-    DemoScenario,
-    OutcomeRepository,
-    seed_demo_scenario,
-    seed_fictional_tickets,
 )
 from maf_outcome_economics.telemetry import configure_telemetry
 
 app = typer.Typer(help="Analyze and verify outcome economics.", no_args_is_help=True)
 console = Console()
+
+GovernanceDisplayDecision = GovernanceDecision | GenericGovernanceDecision
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +118,7 @@ def seed(
     """Seed fictional tickets and configurable illustrative pricing."""
     settings = Settings.from_env()
     repository = OutcomeRepository(settings.database_path)
-    ticket_count = seed_fictional_tickets(repository)
+    ticket_count = TicketScenario().seed(repository)
     pricing = PricingRecord(
         id=f"pricing:{provider}:{model}",
         provider=provider,
@@ -215,7 +227,93 @@ def _comparison_table(reports: list[VariantReport]) -> Table:
     return table
 
 
-def _decision_panel(decision: GovernanceDecision) -> Panel:
+def _tokenomics_table(analysis: TicketGenericAnalysis) -> Table:
+    """Render token efficiency and review attribution from generic analysis."""
+    comparison = analysis.token_comparison
+    table = Table(title="Verified Outcome Tokenomics")
+    table.add_column("Metric")
+    table.add_column("Baseline", justify="right")
+    table.add_column("Optimized", justify="right")
+    rows = (
+        (
+            "Verified outcomes",
+            str(comparison.control.verified_outcomes),
+            str(comparison.treatment.verified_outcomes),
+        ),
+        (
+            "Total tokens",
+            f"{comparison.control.total_tokens:,}",
+            f"{comparison.treatment.total_tokens:,}",
+        ),
+        (
+            "Tokens / verified outcome",
+            _decimal_text(comparison.control.tokens_per_verified_outcome),
+            _decimal_text(comparison.treatment.tokens_per_verified_outcome),
+        ),
+        (
+            "Review tokens",
+            f"{analysis.control_review_attribution.total_review_tokens:,}",
+            f"{analysis.treatment_review_attribution.total_review_tokens:,}",
+        ),
+        (
+            "Non-contributing review tokens",
+            f"{analysis.control_review_attribution.non_contributing_review_tokens:,}",
+            f"{analysis.treatment_review_attribution.non_contributing_review_tokens:,}",
+        ),
+        (
+            "Token efficiency improvement",
+            "-",
+            (
+                f"{comparison.efficiency_improvement:.1%}"
+                if comparison.efficiency_improvement is not None
+                else "n/a"
+            ),
+        ),
+    )
+    for row in rows:
+        table.add_row(*row)
+    return table
+
+
+def _decimal_text(value: Decimal | None) -> str:
+    return f"{value:,.2f}" if value is not None else "n/a"
+
+
+def _decision_panel(decision: GovernanceDisplayDecision) -> Panel:
+    if isinstance(decision, GenericGovernanceDecision):
+        gates = "\n".join(
+            f"- {result.gate.value}: {result.status.value} ({result.reason})"
+            for result in decision.gate_results
+        )
+        actions = "\n".join(
+            f"- {action}" for action in decision.recommended_actions
+        )
+        optimizations = "\n".join(
+            f"- {recommendation.suggested_action} "
+            f"({recommendation.evidence_metric}: "
+            f"{recommendation.observed_value} vs "
+            f"{recommendation.target_value})"
+            for recommendation in decision.optimization_recommendations
+        )
+        optimization_section = (
+            f"\n\n[bold]Token optimization[/bold]\n{optimizations}"
+            if optimizations
+            else ""
+        )
+        border_style = {
+            GenericGovernanceAction.SCALE: "green",
+            GenericGovernanceAction.MONITOR: "cyan",
+            GenericGovernanceAction.OPTIMIZE: "yellow",
+            GenericGovernanceAction.STOP: "red",
+            GenericGovernanceAction.INSUFFICIENT_EVIDENCE: "yellow",
+        }[decision.action]
+        return Panel(
+            f"[bold]Generic gates[/bold]\n{gates}\n\n"
+            f"[bold]Recommended action[/bold]\n{actions}"
+            f"{optimization_section}",
+            title=f"Governance Decision: {decision.action.value.upper()}",
+            border_style=border_style,
+        )
     explanations = {
         GovernanceReasonCode.THRESHOLDS_MET: (
             "Quality and safety gates passed, and cost per accepted outcome is "
@@ -287,7 +385,7 @@ def _variant_strategy_panel(variant: WorkflowVariant) -> Panel:
 
 def _outcome_panel(
     reports: list[VariantReport],
-    decision: GovernanceDecision,
+    decision: GovernanceDisplayDecision,
 ) -> Panel:
     baseline, optimized = reports
     baseline_tokens = (
@@ -356,7 +454,12 @@ async def _run_demo_variants(
     service: ConsoleService,
     limit: int,
     provider: ConsoleProvider,
-) -> tuple[list[VariantReport], GovernanceDecision, list[TicketProgress]]:
+) -> tuple[
+    list[VariantReport],
+    GovernanceDisplayDecision,
+    list[TicketProgress],
+    TicketGenericAnalysis | None,
+]:
     """Run both demo variants on one event loop and calculate the decision."""
     progress_events: list[TicketProgress] = []
 
@@ -379,7 +482,14 @@ async def _run_demo_variants(
     console.print("\n[bold]Calculating quality and outcome economics...[/bold]")
     reports = [service.report(variant) for variant in WorkflowVariant]
     console.print("Evaluating optimized governance decision...")
-    return reports, service.decide(WorkflowVariant.OPTIMIZED), progress_events
+    decision: GovernanceDisplayDecision
+    generic_analysis: TicketGenericAnalysis | None = None
+    if provider is ConsoleProvider.LIVE:
+        generic_analysis = await service.analyze_generic()
+        decision = generic_analysis.decision
+    else:
+        decision = service.decide(WorkflowVariant.OPTIMIZED)
+    return reports, decision, progress_events, generic_analysis
 
 
 def _execute_demo(
@@ -388,12 +498,9 @@ def _execute_demo(
     provider: ConsoleProvider,
     html_output: Path,
     scenario: DemoScenario | None = None,
-) -> tuple[list[VariantReport], GovernanceDecision]:
+) -> tuple[list[VariantReport], GovernanceDisplayDecision]:
     repository = OutcomeRepository(settings.database_path)
-    if scenario is None:
-        seed_fictional_tickets(repository)
-    else:
-        seed_demo_scenario(repository, scenario)
+    TicketScenario().seed(repository, scenario)
     if not repository.list_pricing():
         repository.save_pricing(
             PricingRecord(
@@ -417,10 +524,12 @@ def _execute_demo(
         )
     console.print(_demo_intro_panel(limit, provider))
     service = ConsoleService(settings)
-    reports, decision, progress_events = asyncio.run(
+    reports, decision, progress_events, generic_analysis = asyncio.run(
         _run_demo_variants(service, limit, provider)
     )
     console.print(_comparison_table(reports))
+    if generic_analysis is not None:
+        console.print(_tokenomics_table(generic_analysis))
     console.print(_outcome_panel(reports, decision))
     console.print(_decision_panel(decision))
     report_path = write_demo_report(
@@ -430,6 +539,7 @@ def _execute_demo(
         provider,
         progress_events,
         limit,
+        generic_analysis,
     )
     console.print(f"[bold green]HTML report:[/bold green] {report_path}")
     return reports, decision
@@ -637,6 +747,8 @@ def demo_scenarios() -> None:
                 html_output,
                 scenario,
             )
+            if not isinstance(decision, GovernanceDecision):
+                raise RuntimeError("Rehearsal scenarios require legacy governance")
             optimized = next(
                 report
                 for report in reports
@@ -658,6 +770,93 @@ def demo_scenarios() -> None:
         ],
     )
     console.print(f"[bold green]Scenario index:[/bold green] {index_path}")
+
+
+def _print_invoice_scenario(result: InvoiceScenarioResult) -> None:
+    """Render normalized invoice economics and governance."""
+    table = Table(title="Invoice Processing Outcome Economics")
+    table.add_column("Metric")
+    table.add_column("Manual", justify="right")
+    table.add_column("Automated", justify="right")
+    table.add_row(
+        "Verified invoices",
+        str(result.comparison.control.verified_outcomes),
+        str(result.comparison.treatment.verified_outcomes),
+    )
+    table.add_row(
+        "Total cost",
+        f"{result.comparison.control.total_cost:.2f} USD",
+        f"{result.comparison.treatment.total_cost:.2f} USD",
+    )
+    table.add_row(
+        "Cost / verified invoice",
+        f"{result.comparison.control.cost_per_verified_outcome:.2f} USD",
+        f"{result.comparison.treatment.cost_per_verified_outcome:.2f} USD",
+    )
+    console.print(table)
+    console.print(
+        Panel(
+            f"[bold]Net savings[/bold]: {result.comparison.net_savings:.2f} USD\n"
+            f"[bold]Governance action[/bold]: {result.decision.action.value.upper()}\n\n"
+            "Invoice records were normalized through generic connector contracts; "
+            "verification, cost comparison, and governance contain no invoice logic.",
+            title="Generic Architecture Proof",
+            border_style="green",
+        )
+    )
+
+
+@app.command("list-scenarios")
+def list_scenarios() -> None:
+    """List runnable reference scenarios and their shortcut commands."""
+    table = Table(title="Available Outcome Economics Scenarios")
+    table.add_column("Scenario ID")
+    table.add_column("Name")
+    table.add_column("Shortcut")
+    for descriptor in SCENARIO_CATALOG:
+        table.add_row(
+            descriptor.id.value,
+            descriptor.name,
+            descriptor.shortcut,
+        )
+    console.print(table)
+
+
+@app.command("run-scenario")
+def run_scenario(
+    scenario: Annotated[
+        ScenarioId,
+        typer.Argument(help="Stable scenario identifier from list-scenarios."),
+    ],
+) -> None:
+    """Run a reference scenario through its deterministic local path."""
+    console.rule(f"[bold]{scenario.value}[/bold]")
+    if scenario is ScenarioId.INVOICE_PROCESSING:
+        _print_invoice_scenario(asyncio.run(InvoiceProcessingScenario().run()))
+        return
+
+    database_path = Path("data") / "scenario-ticket-triage.db"
+    database_path.unlink(missing_ok=True)
+    settings = Settings.from_env().model_copy(update={"database_path": database_path})
+    try:
+        _execute_demo(
+            settings,
+            3,
+            ConsoleProvider.FAKE,
+            Path("artifacts") / "ticket-triage.html",
+        )
+    except KeyboardInterrupt as error:
+        console.print("[yellow]Scenario interrupted.[/yellow]")
+        raise typer.Exit(code=130) from error
+    except Exception as error:
+        console.print(f"[red]Scenario failed:[/red] {error}")
+        raise typer.Exit(code=1) from error
+
+
+@app.command("invoice-demo")
+def invoice_demo() -> None:
+    """Run the generic invoice-processing economics scenario."""
+    _print_invoice_scenario(asyncio.run(InvoiceProcessingScenario().run()))
 
 
 @app.command("telemetry-smoke-test")

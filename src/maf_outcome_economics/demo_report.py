@@ -1,14 +1,21 @@
 """Self-contained HTML reporting for the baseline versus optimized demo."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from decimal import Decimal
 from html import escape
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from maf_outcome_economics.console_service import (
     ConsoleProvider,
     TicketProgress,
     VariantReport,
+)
+from maf_outcome_economics.core import (
+    GenericGovernanceAction,
+    GenericGovernanceDecision,
 )
 from maf_outcome_economics.domain import (
     GovernanceAction,
@@ -16,6 +23,9 @@ from maf_outcome_economics.domain import (
     GovernanceReasonCode,
     WorkflowVariant,
 )
+
+if TYPE_CHECKING:
+    from maf_outcome_economics.scenarios.ticket import TicketGenericAnalysis
 
 _REASON_EXPLANATIONS = {
     GovernanceReasonCode.THRESHOLDS_MET: (
@@ -38,14 +48,17 @@ _REASON_EXPLANATIONS = {
     ),
 }
 
+GovernanceDisplayDecision = GovernanceDecision | GenericGovernanceDecision
+
 
 def write_demo_report(
     output_path: Path,
     reports: list[VariantReport],
-    decision: GovernanceDecision,
+    decision: GovernanceDisplayDecision,
     provider: ConsoleProvider,
     progress_events: list[TicketProgress],
     ticket_limit: int,
+    generic_analysis: TicketGenericAnalysis | None = None,
 ) -> Path:
     """Write a self-contained HTML report from typed demo results."""
     reports_by_variant = {report.variant: report for report in reports}
@@ -64,6 +77,7 @@ def write_demo_report(
         completed,
         ticket_limit,
         datetime.now(UTC),
+        generic_analysis,
     )
     resolved_path = output_path.resolve()
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
@@ -146,11 +160,12 @@ def write_scenario_index(
 def _render_page(
     baseline: VariantReport,
     optimized: VariantReport,
-    decision: GovernanceDecision,
+    decision: GovernanceDisplayDecision,
     provider: ConsoleProvider,
     completed: list[TicketProgress],
     ticket_limit: int,
     captured_at: datetime,
+    generic_analysis: TicketGenericAnalysis | None,
 ) -> str:
     baseline_tokens = _total_tokens(baseline)
     optimized_tokens = _total_tokens(optimized)
@@ -166,15 +181,34 @@ def _render_page(
         if provider is ConsoleProvider.LIVE
         else "Illustrative rehearsal telemetry"
     )
-    governance_color = {
-        GovernanceAction.SCALE: "green",
-        GovernanceAction.OPTIMIZE: "amber",
-        GovernanceAction.STOP: "red",
-    }.get(decision.action, "amber")
-    reasons = " ".join(
-        _REASON_EXPLANATIONS[code] for code in decision.reason_codes
-    )
-    audit_codes = ", ".join(code.value for code in decision.reason_codes)
+    if isinstance(decision, GenericGovernanceDecision):
+        governance_color = {
+            GenericGovernanceAction.SCALE: "green",
+            GenericGovernanceAction.MONITOR: "blue",
+            GenericGovernanceAction.OPTIMIZE: "amber",
+            GenericGovernanceAction.STOP: "red",
+            GenericGovernanceAction.INSUFFICIENT_EVIDENCE: "amber",
+        }[decision.action]
+        reasons = " ".join(result.reason for result in decision.gate_results)
+        audit_codes = ", ".join(
+            f"{result.gate.value}:{result.status.value}"
+            for result in decision.gate_results
+        )
+        optimization = " ".join(
+            recommendation.suggested_action
+            for recommendation in decision.optimization_recommendations
+        )
+    else:
+        governance_color = {
+            GovernanceAction.SCALE: "green",
+            GovernanceAction.OPTIMIZE: "amber",
+            GovernanceAction.STOP: "red",
+        }.get(decision.action, "amber")
+        reasons = " ".join(
+            _REASON_EXPLANATIONS[code] for code in decision.reason_codes
+        )
+        audit_codes = ", ".join(code.value for code in decision.reason_codes)
+        optimization = ""
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -224,12 +258,14 @@ def _render_page(
         </div>
       </div>
     </section>
+    {_tokenomics_section(generic_analysis)}
     <section class="governance {governance_color}">
       <div class="decision">{decision.action.value.upper()}</div>
       <div>
         <h2>Governance decision</h2>
         <p>{escape(reasons)}</p>
         <p class="recommendation">{escape(" ".join(decision.recommended_actions))}</p>
+        {f'<p class="recommendation">{escape(optimization)}</p>' if optimization else ''}
         <div class="audit">audit codes: {escape(audit_codes)}</div>
       </div>
     </section>
@@ -239,6 +275,51 @@ def _render_page(
 </body>
 </html>
 """
+
+
+def _tokenomics_section(analysis: TicketGenericAnalysis | None) -> str:
+    if analysis is None:
+        return ""
+    comparison = analysis.token_comparison
+    improvement = (
+        f"{comparison.efficiency_improvement:.1%}"
+        if comparison.efficiency_improvement is not None
+        else "n/a"
+    )
+    rows = (
+        (
+            "Verified outcomes",
+            str(comparison.control.verified_outcomes),
+            str(comparison.treatment.verified_outcomes),
+        ),
+        (
+            "Tokens / verified outcome",
+            _decimal(comparison.control.tokens_per_verified_outcome),
+            _decimal(comparison.treatment.tokens_per_verified_outcome),
+        ),
+        (
+            "Review tokens",
+            f"{analysis.control_review_attribution.total_review_tokens:,}",
+            f"{analysis.treatment_review_attribution.total_review_tokens:,}",
+        ),
+        (
+            "Non-contributing review tokens",
+            f"{analysis.control_review_attribution.non_contributing_review_tokens:,}",
+            f"{analysis.treatment_review_attribution.non_contributing_review_tokens:,}",
+        ),
+        ("Token efficiency improvement", "-", improvement),
+    )
+    return f"""<section class="results tokenomics">
+      <table>
+        <caption>Verified Outcome Tokenomics</caption>
+        <thead><tr><th>Persisted metric</th><th>Baseline</th><th>Optimized</th></tr></thead>
+        <tbody>{''.join(_metric_row(*row) for row in rows)}</tbody>
+      </table>
+    </section>"""
+
+
+def _decimal(value: Decimal | None) -> str:
+    return f"{value:,.2f}" if value is not None else "n/a"
 
 
 def _progress_rows(events: list[TicketProgress]) -> str:

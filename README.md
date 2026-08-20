@@ -1,7 +1,7 @@
 ---
 title: MAF Outcome Economics
 description: Python service foundation for verified outcome economics using Microsoft Agent Framework
-ms.date: 2026-08-19
+ms.date: 2026-08-20
 ms.topic: overview
 ---
 
@@ -10,6 +10,13 @@ ms.topic: overview
 `maf-outcome-economics` is a Python 3.11 foundation for evaluating the economic
 impact of measurable outcomes. It combines deterministic calculations and
 verification with Microsoft Agent Framework workflows and Azure OpenAI.
+
+The outcome-economics core is framework-neutral. Microsoft Agent Framework
+(MAF) supplies one workflow and telemetry implementation, but verification,
+cost aggregation, process comparison, and governance operate only on generic
+data transfer objects (DTOs). A different workflow engine, telemetry backend,
+or business scenario can feed the same core through connector protocols and
+scenario adapters.
 
 > [!IMPORTANT]
 > Every seeded support ticket is fictional. Sensitive telemetry capture is
@@ -21,19 +28,102 @@ verification with Microsoft Agent Framework workflows and Azure OpenAI.
 ```text
 maf-outcome-economics/
 |-- src/maf_outcome_economics/
+|   |-- core/          # Framework-neutral DTOs and economics services
+|   |-- connectors/    # Source protocols and external-system connectors
+|   |-- scenarios/     # Domain adapters and scenario composition
 |   |-- agents/        # Azure OpenAI agent construction
-|   |-- domain/        # Pydantic domain models
-|   |-- workflows/     # Agent Framework orchestration
-|   |-- telemetry/     # OpenTelemetry configuration
+|   |-- workflows/     # Compatibility workflow exports
+|   |-- telemetry/     # MAF and OpenTelemetry capture
 |   |-- persistence/   # SQLite repositories
-|   |-- verification/  # Outcome evidence checks
-|   |-- economics/     # Economic impact calculations
+|   |-- economics/     # Compatibility economics projections
 |   `-- reporting/     # Human-readable reports
 |-- tests/             # Unit and integration tests
 |-- .env.example       # Secret-free configuration template
 |-- pyproject.toml     # Project and tool configuration
 `-- uv.lock            # Locked dependency graph
 ```
+
+## Generic Architecture
+
+The generic core uses a small normalized vocabulary instead of ticket, agent,
+span, or model-call types:
+
+| DTO | Meaning |
+|-----|---------|
+| `ProcessDefinition` | Stable identity and metadata for a business process |
+| `ProcessVariant` | Control or treatment implementation of a process |
+| `ReportingPeriod` | Time boundary for loading comparable records |
+| `WorkUnit` | One completed unit of business work |
+| `EvidenceRecord` | One independently observed fact about a work unit |
+| `CostEntry` | One normalized model, labor, infrastructure, or other cost |
+| `TokenEntry` | One normalized input and output token observation |
+
+`OutcomeContract` and `EvidenceRule` declare what counts as a verified outcome.
+`OutcomeVerifier` evaluates the work and evidence DTOs. `CostLedger` aggregates
+and reconciles costs, `compare_processes` compares control and treatment, and
+`GenericGovernanceEngine` applies deterministic evidence, quality, safety,
+compliance, business-outcome, unit-cost, net-value, and token-efficiency gates.
+
+### Connector contracts
+
+The `connectors` package defines four asynchronous structural protocols:
+
+* `WorkUnitSource.load_work_units()` returns `WorkUnit` records
+* `EvidenceSource.load_evidence()` returns `EvidenceRecord` records
+* `CostSource.load_costs()` returns `CostEntry` records
+* `TokenSource.load_tokens()` returns `TokenEntry` records
+
+These protocols do not require inheritance or a particular SDK. An integration
+only needs methods with the expected signatures, so records can come from SQL,
+an event stream, a SaaS API, OpenTelemetry, or deterministic fixtures.
+
+### Adapters and composition
+
+Adapters translate source-specific records at the edge:
+
+* `MAFTelemetryCostConnector` reads persisted billable MAF chat spans and emits
+    estimated model `CostEntry` records. MAF provider names, model names, token
+    counters, trace IDs, and span IDs stop at this boundary.
+* `MAFTelemetryTokenConnector` reads the same spans and preserves input and
+    output quantities as `TokenEntry` records. It attributes each observation
+    to primary work, review, coordination, retry, rework, failed, or unknown
+    use without converting the quantity to currency.
+* `TicketScenarioConnector` translates persisted ticket runs into `WorkUnit`
+    records and deterministic routing verification into `EvidenceRecord` facts.
+    Ticket labels and routing types stop at this boundary.
+* `InvoiceScenarioConnector` produces the same generic DTOs from a separate
+    invoice-processing domain, demonstrating that the core is not ticket-bound.
+
+`TicketEconomicsAnalyzer` composes the two ticket-side adapters and sends only
+generic DTOs into `OutcomeVerifier`, `compare_processes`, and
+`GenericGovernanceEngine`. Legacy ticket reports remain presentation
+projections for compatibility; the live demo's governance decision comes from
+the generic analysis.
+
+```text
+MAF workflow -> OpenTelemetry -> SQLite -> MAFTelemetryCostConnector  -> CostEntry
+                                      `-> MAFTelemetryTokenConnector -> TokenEntry
+Ticket runs + verifier -> TicketScenarioConnector -> WorkUnit + EvidenceRecord
+
+WorkUnit + EvidenceRecord -> OutcomeVerifier -> verified outcomes
+CostEntry + verified outcomes -> compare_processes -> economics comparison
+TokenEntry + verified outcomes -> compare_token_efficiency -> token comparison
+economics + token + assurance gates -> GenericGovernanceEngine -> decision
+```
+
+### Why the core is MAF-agnostic
+
+Nothing under `maf_outcome_economics.core` imports Agent Framework,
+OpenTelemetry, Azure SDKs, ticket models, or SQLite repositories. Core services
+depend only on normalized Pydantic DTOs and deterministic rules. MAF is a
+replaceable producer at the integration edge, not a dependency of the
+economics model.
+
+To use another orchestration framework, retain the core and implement sources
+that emit `WorkUnit`, `EvidenceRecord`, `CostEntry`, and `TokenEntry`. To use
+another business domain, add a scenario adapter and declarative
+`OutcomeContract`. Neither change requires rewriting verification, comparison,
+cost reconciliation, token accounting, or generic governance.
 
 ## Setup
 
@@ -195,8 +285,10 @@ uv run maf-outcome-economics demo --provider live --limit 1
 
 The command prints progress for every fictional ticket, real trace IDs, actual
 input and output token counts from model spans, deterministic acceptance, a
-baseline-to-optimized economics comparison, and a `SCALE`, `OPTIMIZE`, or
-`STOP` governance result. See [DEMO.md](DEMO.md) for the two-minute sequence.
+baseline-to-optimized economics comparison, and a generic governance result.
+Because live model costs are estimated until reconciled billing evidence is
+available, an otherwise passing live run returns `MONITOR` rather than
+`SCALE`. See [DEMO.md](DEMO.md) for the two-minute sequence.
 
 ## Application Insights Traces
 
@@ -367,10 +459,28 @@ records only verification booleans and numeric quality, never ticket text.
 
 ## Outcome Economics
 
-`OutcomeEconomicsCalculator` consumes normalized model calls, deterministic
-verification results, and provider/model pricing. It bills only semantic chat
-calls and defensively deduplicates them by trace ID and span ID, preventing
-outer agent spans or repeated exports from inflating cost.
+The live ticket demo normalizes persisted runs, deterministic verification, and
+MAF telemetry into generic `WorkUnit`, `EvidenceRecord`, `CostEntry`, and
+`TokenEntry` DTOs. `OutcomeVerifier`, `compare_processes`,
+`compare_token_efficiency`, and `GenericGovernanceEngine` then produce the
+authoritative live economics and governance result.
+
+Token quantities remain separate from estimated currency. `TokenLedger`
+deduplicates observations by trace and span, limits them to the reporting
+period and selected work units, and groups them by purpose. The comparison
+reports total tokens, tokens per independently verified outcome, comparable
+control tokens, tokens avoided, and efficiency improvement.
+
+Review attribution compares pre-review triage with final deterministic
+verification. Review tokens are classified as useful corrections, harmful
+corrections, non-contributing reviews, or inconclusive work. Invoking a review
+does not by itself prove that its tokens delivered assurance value.
+
+The ticket-specific `OutcomeEconomicsCalculator` remains available for legacy
+console and HTML projections. It consumes normalized model calls,
+deterministic verification results, and provider/model pricing. It bills only
+semantic chat calls and defensively deduplicates them by trace ID and span ID,
+preventing outer agent spans or repeated exports from inflating cost.
 
 The result reports input and output tokens, estimated model cost, accepted
 outcomes, cost and tokens per accepted outcome, and estimated contribution cost
@@ -382,16 +492,35 @@ of total model cost and can overlap when a coordination call is also a retry.
 
 ## Governance
 
-`GovernanceEngine` reads minimum acceptance, average quality, Critical-priority
-recall, and maximum cost-per-accepted-outcome thresholds from the
-`OutcomeContract`. It returns typed evidence metrics, machine-readable reason
-codes, and recommended actions, and can persist the decision through
-`OutcomeRepository`.
+`GenericGovernanceEngine` is the authoritative engine for the live ticket
+comparison and generic scenarios. The ticket composition adds deterministic
+limits for tokens per verified outcome, efficiency improvement, review-token
+share, and retry-token share. It evaluates five possible actions:
 
-Decision precedence is deterministic. Any failed quality or safety gate, or no
-accepted outcomes, returns `STOP`. When all quality and safety gates pass but
-unit cost is above budget, the engine returns `OPTIMIZE`. It returns `SCALE`
-when every threshold is met; equality counts as meeting a threshold.
+* `SCALE` when every gate passes and costs are reconciled
+* `MONITOR` when every gate passes but costs remain estimated
+* `OPTIMIZE` when evidence and assurance pass but economics fail
+* `STOP` when a quality, safety, compliance, or business-outcome gate fails
+* `INSUFFICIENT_EVIDENCE` when required evidence or gate assessments are unknown
+
+Evidence and hard-stop gates take precedence over economics. This ordering
+prevents favorable cost or token estimates from overriding missing or failed
+outcome assurance. A failed token gate returns `OPTIMIZE` with a typed
+recommendation such as narrowing review triggers, reducing retry work, or
+profiling the primary prompt. Passing token gates retain risk-based review and
+recommend monitoring skipped routine work. Recommendations do not mutate the
+workflow policy automatically.
+
+The ticket-specific `GovernanceEngine` remains as a compatibility projection
+for existing scenario and `decide` commands. It reads minimum acceptance,
+average quality, Critical-priority recall, and maximum
+cost-per-accepted-outcome thresholds from the legacy `OutcomeContract`.
+
+Legacy decision precedence is deterministic. Any failed quality or safety gate,
+or no accepted outcomes, returns `STOP`. When all quality and safety gates pass
+but unit cost is above budget, the compatibility engine returns `OPTIMIZE`. It
+returns `SCALE` when every threshold is met; equality counts as meeting a
+threshold.
 
 ## Telemetry
 

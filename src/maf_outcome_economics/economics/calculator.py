@@ -4,6 +4,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from decimal import Decimal
 
+from maf_outcome_economics.core import CostCategory, CostEntry, CostEvidenceStatus
 from maf_outcome_economics.domain import (
     BillableModelCall,
     EconomicAssessment,
@@ -96,6 +97,30 @@ class OutcomeEconomicsCalculator:
             coordination_tax=coordination_tax,
             currency=self._currency,
         )
+
+    def to_cost_entries(
+        self,
+        model_calls: Iterable[BillableModelCall],
+        *,
+        variant_id: str,
+        reconciliation_key: str | None = None,
+    ) -> list[CostEntry]:
+        """Convert unique billable model calls into estimated ledger entries."""
+        return [
+            CostEntry(
+                id=f"model-call:{call.trace_id}:{call.span_id}",
+                process_variant_id=variant_id,
+                work_unit_id=call.business_task_id,
+                category=CostCategory.MODEL,
+                amount=self._cost(call),
+                currency=self._currency,
+                source="model-usage-calculator",
+                status=CostEvidenceStatus.ESTIMATED,
+                reconciliation_key=reconciliation_key,
+                incurred_at=call.recorded_at,
+            )
+            for call in self._unique_billable_calls(model_calls)
+        ]
 
     @staticmethod
     def _call_key(call: BillableModelCall) -> tuple[str, str]:

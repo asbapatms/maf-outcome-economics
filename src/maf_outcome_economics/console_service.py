@@ -9,28 +9,27 @@ from uuid import uuid4
 
 from opentelemetry import trace
 
-from maf_outcome_economics.agents import (
-    create_rehearsal_agent_suite,
-    create_support_agent_suite,
-)
 from maf_outcome_economics.config import Settings
 from maf_outcome_economics.domain import (
     BillableModelCall,
     GovernanceDecision,
     OutcomeEconomics,
     PricingRecord,
-    TicketWorkflowInput,
-    TicketWorkflowResult,
-    WorkflowVariant,
 )
 from maf_outcome_economics.economics import OutcomeEconomicsCalculator
 from maf_outcome_economics.governance import GovernanceEngine
 from maf_outcome_economics.persistence import (
     OutcomeRepository,
-    contract_id_for_variant,
+)
+from maf_outcome_economics.scenarios.ticket import (
+    TicketEconomicsAnalyzer,
+    TicketGenericAnalysis,
+    TicketScenario,
+    TicketWorkflowInput,
+    TicketWorkflowResult,
+    WorkflowVariant,
 )
 from maf_outcome_economics.telemetry import configure_telemetry
-from maf_outcome_economics.workflows import stream_ticket_workflow
 
 
 class ConsoleProvider(StrEnum):
@@ -77,9 +76,14 @@ class TicketProgress:
 class ConsoleService:
     """Run and report on live or explicitly fake workflow executions."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        scenario: TicketScenario | None = None,
+    ) -> None:
         self.settings = settings
         self.repository = OutcomeRepository(settings.database_path)
+        self.scenario = scenario or TicketScenario()
         self._telemetry_configured = False
 
     async def run_variant(
@@ -98,7 +102,7 @@ class ConsoleService:
         tickets = self.repository.list_tickets()[:limit]
         if not tickets:
             raise ConsoleSetupError("No tickets found. Run the seed command first.")
-        contract_id = contract_id_for_variant(variant)
+        contract_id = self.scenario.contract_id(variant)
         if self.repository.get_outcome_contract(contract_id) is None:
             raise ConsoleSetupError("Outcome contract missing. Run the seed command first.")
 
@@ -108,10 +112,10 @@ class ConsoleService:
                 enable_application_insights=provider is ConsoleProvider.LIVE,
             )
             self._telemetry_configured = True
-        if provider is ConsoleProvider.LIVE:
-            suite = create_support_agent_suite(self.settings)
-        else:
-            suite = create_rehearsal_agent_suite()
+        suite = self.scenario.create_agent_suite(
+            self.settings,
+            live=provider is ConsoleProvider.LIVE,
+        )
         results: list[TicketWorkflowResult] = []
         try:
             for index, ticket in enumerate(tickets, start=1):
@@ -136,11 +140,10 @@ class ConsoleService:
                     variant=variant,
                 )
                 output = None
-                async for event in stream_ticket_workflow(
+                async for event in self.scenario.stream(
                     request,
                     self.repository,
-                    suite.triage,
-                    suite.review,
+                    suite,
                 ):
                     if event.type == "output" and isinstance(
                         event.data, TicketWorkflowResult
@@ -220,6 +223,17 @@ class ConsoleService:
             ),
         )
 
+    async def analyze_generic(self) -> TicketGenericAnalysis:
+        """Analyze all persisted ticket runs through the generic core pipeline."""
+        pricing = self.repository.list_pricing()
+        if not pricing:
+            raise ConsoleSetupError("No pricing found. Run the seed command first.")
+        self.require_pricing(self.repository.list_billable_model_usage(), pricing)
+        try:
+            return await TicketEconomicsAnalyzer(self.repository).analyze()
+        except ValueError as error:
+            raise ConsoleSetupError(str(error)) from error
+
     def validate_variant_pricing(self, variant: WorkflowVariant) -> None:
         """Require approved pricing for every captured call in one variant."""
         pricing = self.repository.list_pricing()
@@ -256,7 +270,7 @@ class ConsoleService:
     def decide(self, variant: WorkflowVariant) -> GovernanceDecision:
         """Evaluate and persist governance for one variant's current evidence."""
         report = self.report(variant)
-        contract = self.repository.get_outcome_contract(contract_id_for_variant(variant))
+        contract = self.repository.get_outcome_contract(self.scenario.contract_id(variant))
         if contract is None:
             raise ConsoleSetupError("Outcome contract missing. Run the seed command first.")
         return GovernanceEngine(self.repository).evaluate(

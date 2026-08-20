@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from maf_outcome_economics.core import CostCategory, CostEvidenceStatus
 from maf_outcome_economics.domain import (
     BillableModelCall,
     PricingRecord,
@@ -154,6 +155,29 @@ def test_given_duplicate_chat_and_agent_span_when_calculated_then_bills_chat_onc
     assert result.total_output_tokens == 10_000
     assert result.estimated_model_cost == Decimal("0.280")
     assert result.retry_tax == Decimal("0")
+
+
+def test_given_model_calls_when_converted_then_returns_estimated_model_cost_entries() -> None:
+    # Arrange
+    calculator = OutcomeEconomicsCalculator([_pricing()])
+    chat = _call("same-span")
+    duplicate_chat = chat.model_copy(update={"input_tokens": 999_999})
+    agent_span = _call("agent-span", operation_name="invoke_agent")
+
+    # Act
+    entries = calculator.to_cost_entries(
+        [chat, duplicate_chat, agent_span],
+        variant_id="agent-v1",
+        reconciliation_key="deployment-august",
+    )
+
+    # Assert
+    assert len(entries) == 1
+    assert entries[0].category is CostCategory.MODEL
+    assert entries[0].status is CostEvidenceStatus.ESTIMATED
+    assert entries[0].amount == Decimal("0.280")
+    assert entries[0].work_unit_id == "task-1"
+    assert entries[0].reconciliation_key == "deployment-august"
 
 
 def test_given_no_accepted_outcomes_when_calculated_then_per_outcome_values_are_none() -> None:

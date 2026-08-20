@@ -28,7 +28,10 @@ def test_given_root_help_when_invoked_then_every_command_is_registered() -> None
         "demo-scenarios",
         "health",
         "init-db",
+        "invoice-demo",
+        "list-scenarios",
         "run",
+        "run-scenario",
         "seed",
         "telemetry-smoke-test",
         "trace",
@@ -53,6 +56,61 @@ def test_given_local_environment_when_health_runs_then_dependencies_are_reported
     assert result.exit_code == 0
     assert "Agent Framework" in result.stdout
     assert "SQLite" in result.stdout
+
+
+def test_given_invoice_demo_when_invoked_then_generic_economics_are_rendered() -> None:
+    # Act
+    result = CliRunner().invoke(app, ["invoice-demo"])
+
+    # Assert
+    assert result.exit_code == 0
+    assert "Invoice Processing Outcome Economics" in result.stdout
+    assert "12.00 USD" in result.stdout
+    assert "3.00 USD" in result.stdout
+    assert "Net savings: 18.00 USD" in result.stdout
+    assert "Governance action: SCALE" in result.stdout
+    assert "Generic Architecture Proof" in result.stdout
+
+
+def test_given_generic_scenario_commands_when_listed_then_both_shortcuts_are_visible() -> None:
+    # Act
+    result = CliRunner().invoke(app, ["list-scenarios"])
+
+    # Assert
+    assert result.exit_code == 0
+    assert "ticket-triage" in result.stdout
+    assert "invoice-processing" in result.stdout
+    assert "demo --provider fake" in result.stdout
+    assert "invoice-demo" in result.stdout
+
+
+def test_given_invoice_id_when_generic_scenario_runs_then_invoice_shortcut_output_is_used() -> None:
+    # Act
+    result = CliRunner().invoke(app, ["run-scenario", "invoice-processing"])
+
+    # Assert
+    assert result.exit_code == 0
+    assert "invoice-processing" in result.stdout
+    assert "Invoice Processing Outcome Economics" in result.stdout
+    assert "Governance action: SCALE" in result.stdout
+
+
+def test_given_ticket_id_when_generic_scenario_runs_then_ticket_demo_is_preserved(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    monkeypatch.chdir(tmp_path)
+
+    # Act
+    result = CliRunner().invoke(app, ["run-scenario", "ticket-triage"])
+
+    # Assert
+    assert result.exit_code == 0
+    assert "ticket-triage" in result.stdout
+    assert "OutcomeMeter Experiment" in result.stdout
+    assert "Governance Decision:" in result.stdout
+    assert (tmp_path / "artifacts" / "ticket-triage.html").exists()
 
 
 def test_init_db_creates_schema(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -202,7 +260,7 @@ async def test_live_run_rejects_missing_chat_usage_without_substitution(
     repository = OutcomeRepository(settings.database_path)
     seed_fictional_tickets(repository)
     mocker.patch(
-        "maf_outcome_economics.console_service.create_support_agent_suite",
+        "maf_outcome_economics.scenarios.ticket.scenario.create_support_agent_suite",
         return_value=create_rehearsal_agent_suite(),
     )
 
