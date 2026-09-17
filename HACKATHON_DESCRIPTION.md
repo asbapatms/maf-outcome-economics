@@ -434,6 +434,44 @@ Microsoft technology demonstrates an enterprise-relevant implementation, while
 the normalized core avoids permanent dependency on one orchestration framework
 or business scenario.
 
+## Relationship to Existing Microsoft Products
+
+OutcomeMeter is best understood as a missing capability inside **Azure AI
+Foundry**, specifically its **Observability and Evaluation** surface, rather
+than as a standalone product.
+
+Azure AI Foundry already gives teams a model catalog, agent-building tools
+(including Microsoft Agent Framework), tracing, evaluation, and cost
+visibility for AI workloads. That observability currently stops at
+**activity** metrics: tokens, latency, spend, and trace counts. OutcomeMeter
+is the layer on top of that activity data. It turns Foundry's existing traces
+and token telemetry into a **verified-outcome denominator**, adds
+deterministic governance gates (quality, safety, compliance, business
+outcome, economics), and produces one auditable recommendation per agent
+workflow: `SCALE`, `MONITOR`, `OPTIMIZE`, `STOP`, or `INSUFFICIENT_EVIDENCE`.
+
+Concretely, this would ship as an **"Outcome Governance" module inside Azure
+AI Foundry Observability**, alongside Foundry's existing evaluation and
+cost-management views. Any agent built and deployed through Foundry could opt
+into an outcome contract, and Foundry would surface the same cost per
+verified outcome, token-efficiency, and review-waste metrics this prototype
+already computes, without requiring a second platform or a separate
+telemetry pipeline.
+
+Azure AI Foundry is the natural home rather than Microsoft Copilot Studio,
+Microsoft Purview, or plain Azure Cost Management, for three reasons:
+
+* The prototype is built directly on **Microsoft Agent Framework**, which
+  Foundry already hosts and orchestrates, so this extends a framework Foundry
+  already integrates rather than introducing a new one.
+* Foundry already has **OpenTelemetry tracing** and a **cost and usage
+  view**; OutcomeMeter extends both instead of duplicating a second
+  telemetry pipeline.
+* Foundry's audience, AI platform and engineering teams building and
+  operating agents, matches the "enterprise leader deciding what to scale"
+  persona this project targets more closely than Copilot Studio's
+  citizen-developer audience.
+
 ## Responsible AI and Privacy
 
 OutcomeMeter treats efficiency as one objective, not the only objective.
