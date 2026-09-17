@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OutcomeMeter Architecture</title>
+<style>
+:root{color-scheme:dark;--canvas:#101516;--panel:#182022;--alt:#1d282a;
+--line:#385055;--ink:#f2f6f4;--muted:#9eb0ae;--cyan:#44d7cf;
+--green:#7ae582;--amber:#ffca5c;--red:#ff6b6b;--purple:#b39ddb}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--canvas);background-image:
+linear-gradient(rgba(68,215,207,.045) 1px,transparent 1px),
+linear-gradient(90deg,rgba(68,215,207,.045) 1px,transparent 1px);
+background-size:32px 32px;color:var(--ink);font-family:Bahnschrift,"Arial Narrow",sans-serif}
+main{width:1600px;min-height:1200px;padding:64px 82px 56px}
+header{display:grid;grid-template-columns:1fr auto;align-items:end;gap:40px;
+border-bottom:2px solid var(--cyan);padding-bottom:24px;margin-bottom:32px}
+.eyebrow{color:var(--cyan);font:700 20px/1.2 "Cascadia Mono",Consolas,monospace;
+text-transform:uppercase}
+h1{margin:8px 0 6px;font-size:52px;line-height:1.05}
+.subtitle{margin:0;color:var(--muted);font-size:23px;max-width:1080px}
+.mode{border:1px solid var(--line);padding:12px 18px;font:700 18px/1
+"Cascadia Mono",Consolas,monospace;text-transform:uppercase;color:var(--muted)}
+
+.zone{border:2px dashed var(--line);border-radius:10px;padding:22px 26px 26px;
+margin-bottom:20px;position:relative}
+.zone-label{position:absolute;top:-17px;left:22px;background:var(--canvas);
+padding:2px 12px;color:var(--muted);font:700 17px/1.2 "Cascadia Mono",Consolas,monospace;
+text-transform:uppercase;letter-spacing:.04em}
+.zone.edge{border-color:var(--amber)}.zone.edge .zone-label{color:var(--amber)}
+.zone.core{border-color:var(--green)}.zone.core .zone-label{color:var(--green)}
+
+.row{display:flex;align-items:stretch;gap:16px}
+.row+.row{margin-top:14px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+padding:16px 18px;flex:1;min-width:0}
+.box h3{margin:0 0 6px;font-size:19px;color:var(--ink);overflow-wrap:anywhere}
+.box p{margin:0;color:var(--muted);font-size:15px;line-height:1.4;overflow-wrap:anywhere}
+.box.accent{border-color:var(--cyan)}.box.accent h3{color:var(--cyan)}
+.box.green{border-color:var(--green)}.box.green h3{color:var(--green)}
+.box.purple{border-color:var(--purple)}.box.purple h3{color:var(--purple)}
+.box.decision{border-color:var(--amber);background:#28230f}
+.box.decision h3{color:var(--amber)}
+
+.arrow-down{display:flex;justify-content:center;align-items:center;height:36px;
+color:var(--cyan);font-size:26px;font-family:"Cascadia Mono",Consolas,monospace}
+.arrow-row{display:flex;justify-content:space-around;color:var(--cyan);
+font-size:22px;font-family:"Cascadia Mono",Consolas,monospace;padding:2px 0}
+
+.gate-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:14px}
+.gate{background:var(--alt);border:1px solid var(--line);border-radius:6px;
+padding:10px 12px;text-align:center}
+.gate .name{color:var(--ink);font:700 15px/1.2 "Cascadia Mono",Consolas,monospace}
+.gate .desc{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.3}
+
+footer{display:flex;justify-content:space-between;margin-top:28px;color:var(--muted);
+font:17px/1.3 "Cascadia Mono",Consolas,monospace;border-top:1px solid var(--line);
+padding-top:16px}
+.callout{background:var(--alt);border-left:6px solid var(--green);padding:16px 22px;
+margin-top:20px;font-size:19px;line-height:1.45}
+.callout strong{color:var(--green)}
+</style>
+</head>
+<body>
+<main>
+<header>
+    <div>
+        <div class="eyebrow">Microsoft Agent Framework · Outcome Economics</div>
+        <h1>One Governance Core. Any Agent Framework, Any Domain.</h1>
+        <p class="subtitle">Telemetry and domain adapters translate at the
+            edge. Verification, comparison, and governance run on normalized
+            DTOs&mdash;never on ticket labels, span IDs, or model names.</p>
+    </div>
+    <div class="mode">Reference architecture</div>
+</header>
+
+<div class="zone edge">
+    <div class="zone-label">Edge &middot; framework-specific</div>
+    <div class="row">
+        <div class="box accent">
+            <h3>Azure OpenAI + Microsoft Agent Framework</h3>
+            <p>Agents execute work and call tools. Every model call and tool
+                invocation is a span.</p>
+        </div>
+        <div class="box accent">
+            <h3>OpenTelemetry</h3>
+            <p>Spans capture token counts, trace IDs, tool calls, and
+                durations for every agent run.</p>
+        </div>
+        <div class="box accent">
+            <h3>SQLite outcome store</h3>
+            <p>Append-only persistence of spans and ticket/invoice run
+                records for later analysis.</p>
+        </div>
+    </div>
+    <div class="arrow-row"><span>&darr;</span><span>&darr;</span><span>&darr;</span></div>
+    <div class="row">
+        <div class="box">
+            <h3>MAFTelemetryCostConnector</h3>
+            <p>Reads billable spans &rarr; emits estimated model
+                <b>CostEntry</b> records.</p>
+        </div>
+        <div class="box">
+            <h3>MAFTelemetryTokenConnector</h3>
+            <p>Reads the same spans &rarr; attributes tokens to primary
+                work, review, retry, rework, or failed &rarr; <b>TokenEntry</b>.</p>
+        </div>
+        <div class="box">
+            <h3>TicketScenarioConnector <span style="color:var(--muted);font-weight:400">
+                (or InvoiceScenarioConnector)</span></h3>
+            <p>Deterministic hidden-label verification &rarr;
+                <b>WorkUnit</b> + <b>EvidenceRecord</b>.</p>
+        </div>
+    </div>
+</div>
+
+<div class="arrow-down">&darr; generic DTOs only &darr;</div>
+
+<div class="zone core">
+    <div class="zone-label">Core &middot; MAF-agnostic, domain-agnostic</div>
+    <div class="row">
+        <div class="box green">
+            <h3>OutcomeVerifier</h3>
+            <p>Evaluates <b>WorkUnit</b> + <b>EvidenceRecord</b> against an
+                <b>OutcomeContract</b> &rarr; verified outcomes.</p>
+        </div>
+        <div class="box green">
+            <h3>compare_processes</h3>
+            <p><b>CostEntry</b> + verified outcomes &rarr; control vs.
+                treatment cost-per-outcome comparison.</p>
+        </div>
+        <div class="box green">
+            <h3>compare_token_efficiency</h3>
+            <p><b>TokenEntry</b> + verified outcomes &rarr; tokens-per-outcome
+                and review-waste attribution.</p>
+        </div>
+    </div>
+    <div class="arrow-down">&darr;</div>
+    <div class="box decision" style="flex:none">
+        <h3>GenericGovernanceEngine</h3>
+        <p>Five deterministic gate groups vote on one decision.</p>
+        <div class="gate-row">
+            <div class="gate"><div class="name">EVIDENCE</div>
+                <div class="desc">Sample size + completeness</div></div>
+            <div class="gate"><div class="name">TRUST</div>
+                <div class="desc">Quality, safety, compliance</div></div>
+            <div class="gate"><div class="name">VALUE</div>
+                <div class="desc">Unit cost, net savings</div></div>
+            <div class="gate"><div class="name">TOKENS</div>
+                <div class="desc">Budget, efficiency gain</div></div>
+            <div class="gate"><div class="name">WASTE</div>
+                <div class="desc">Review + retry waste ratio</div></div>
+        </div>
+    </div>
+    <div class="arrow-down">&darr;</div>
+    <div class="row">
+        <div class="box" style="border-color:var(--green);text-align:center">
+            <h3 style="color:var(--green)">SCALE</h3></div>
+        <div class="box" style="border-color:var(--cyan);text-align:center">
+            <h3 style="color:var(--cyan)">MONITOR</h3></div>
+        <div class="box" style="border-color:var(--amber);text-align:center">
+            <h3 style="color:var(--amber)">OPTIMIZE</h3></div>
+        <div class="box" style="border-color:var(--red);text-align:center">
+            <h3 style="color:var(--red)">STOP</h3></div>
+    </div>
+</div>
+
+<div class="callout"><strong>Why it matters:</strong> nothing under
+    <code>maf_outcome_economics.core</code> imports Agent Framework,
+    OpenTelemetry, Azure SDKs, ticket models, or SQLite. Swap the connector to
+    move frameworks; add a scenario adapter to move domains. Verification,
+    comparison, and governance code never changes.</div>
+
+<footer><span>Generic core &middot; deterministic evidence, not LLM self-grading</span>
+    <span>maf-outcome-economics</span></footer>
+</main>
+</body>
+</html>

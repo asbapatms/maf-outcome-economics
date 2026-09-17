@@ -86,6 +86,67 @@ async def test_given_maf_chat_usage_when_loaded_then_generic_cost_is_returned(
     assert costs[0].source == "maf-opentelemetry"
 
 
+async def test_given_azure_openai_dated_response_model_when_base_is_priced_then_cost_is_returned(
+    tmp_path,
+) -> None:
+    # Arrange
+    timestamp = datetime(2026, 8, 20, tzinfo=UTC)
+    repository = OutcomeRepository(tmp_path / "telemetry.db")
+    repository.save_ticket(
+        Ticket(
+            id="TKT-001",
+            subject="Fictional ticket",
+            description="Generic telemetry connector test.",
+            gold_category="Application",
+            gold_priority="P3",
+            gold_resolver_group="Business Applications",
+        )
+    )
+    repository.create_run(
+        "run-1",
+        "TKT-001",
+        WorkflowVariant.OPTIMIZED,
+        started_at=timestamp,
+        business_task_id="optimized:TKT-001",
+    )
+    repository.save_rehearsal_model_call(
+        usage_id="usage-1",
+        run_id="run-1",
+        provider="azure.ai.openai",
+        model="gpt-5.4-mini-2026-03-17",
+        agent_id="triage",
+        agent_name="TriageAgent",
+        input_tokens=100_000,
+        output_tokens=10_000,
+        recorded_at=timestamp,
+    )
+    connector = MAFTelemetryCostConnector(
+        repository,
+        [
+            PricingRecord(
+                id="pricing-1",
+                provider="azure.ai.openai",
+                model="gpt-5.4-mini",
+                input_cost_per_million_tokens=Decimal("2"),
+                output_cost_per_million_tokens=Decimal("8"),
+            )
+        ],
+        {WorkflowVariant.OPTIMIZED.value: "ticket-optimized-v1"},
+    )
+
+    # Act
+    costs = await connector.load_costs(
+        ReportingPeriod(
+            start_at=timestamp - timedelta(minutes=1),
+            end_at=timestamp + timedelta(minutes=1),
+        )
+    )
+
+    # Assert
+    assert len(costs) == 1
+    assert costs[0].amount == Decimal("0.28")
+
+
 async def test_given_maf_agents_when_loaded_then_tokens_have_business_purpose(
     tmp_path,
 ) -> None:

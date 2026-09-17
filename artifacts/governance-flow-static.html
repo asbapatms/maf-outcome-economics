@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Governance Decision Cascade</title>
+<style>
+:root{--ink:#0f172a;--muted:#475569;--line:#e2e8f0;--panel:#ffffff;--blue:#2563eb}
+*{box-sizing:border-box}
+body{margin:0;background:
+    radial-gradient(circle at 85% 5%, rgba(37,99,235,.10), transparent 24rem),
+    linear-gradient(180deg,#f8fafc 0%,#ffffff 28rem);
+    color:var(--ink);font-family:"Segoe UI",Arial,sans-serif}
+main{width:1500px;padding:56px 70px 60px}
+header{display:grid;grid-template-columns:1fr auto;align-items:end;gap:40px;
+border-bottom:2px solid var(--blue);padding-bottom:20px;margin-bottom:30px}
+.eyebrow{color:var(--blue);font:700 16px/1.2 "Cascadia Mono",Consolas,monospace;
+text-transform:uppercase}
+h1{margin:8px 0 6px;font-size:38px;line-height:1.1;color:var(--ink)}
+.subtitle{margin:0;color:var(--muted);font-size:19px;max-width:1000px}
+.mode{border:1px solid var(--line);padding:10px 16px;font:700 15px/1
+"Cascadia Mono",Consolas,monospace;text-transform:uppercase;color:var(--muted);
+background:#fff;border-radius:6px}
+
+.svg-wrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+padding:26px 30px 20px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.svg-wrap svg{width:100%;height:auto;display:block}
+
+.legend{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}
+.legend .item{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+padding:18px 20px}
+.legend .item h3{margin:0 0 8px;font-size:18px;color:var(--ink)}
+.legend .item p{margin:0;color:var(--muted);font-size:15px;line-height:1.45}
+.legend .item .chip{display:inline-block;font:700 12px "Cascadia Mono",Consolas,monospace;
+color:#166534;background:#DCFCE7;border-radius:5px;padding:3px 8px;margin-bottom:8px}
+
+footer{display:flex;justify-content:space-between;margin-top:26px;color:var(--muted);
+font:15px/1.3 "Cascadia Mono",Consolas,monospace;border-top:1px solid var(--line);
+padding-top:14px}
+</style>
+</head>
+<body>
+<main>
+<header>
+    <div>
+        <div class="eyebrow">Live Dashboard Export &middot; Governance Flow</div>
+        <h1>Five Gate Groups. One Deterministic Decision.</h1>
+        <p class="subtitle">Every stage renders a caption computed from the
+            same generic DTOs shown on hover&mdash;no manual summarizing.
+            Hover any stage in the live dashboard for the full per-gate
+            reason string.</p>
+    </div>
+    <div class="mode">11 / 11 gates passed</div>
+</header>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 1060 122" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+    <g><rect x="0" y="5" width="160" height="88" rx="10" fill="#DCFCE7" stroke="#166534" stroke-width="1.5"/>
+    <circle cx="17" cy="25" r="7" fill="#166534"/>
+    <text x="17" y="29" text-anchor="middle" font-size="12" font-weight="bold" fill="white">&#10003;</text>
+    <text x="30" y="30" font-size="15" font-weight="bold" fill="#166534">Evidence</text>
+    <text x="14" y="57" font-size="12" fill="#475569">Evidence</text>
+    <text x="80" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#166534">32 evaluated &middot; 31 passed</text></g>
+    <path d="M 163 49 L 176 49" stroke="#94a3b8" stroke-width="2"/><path d="M 172 45 L 176 49 L 172 53" fill="none" stroke="#94a3b8" stroke-width="2"/>
+
+    <g><rect x="180" y="5" width="160" height="88" rx="10" fill="#DCFCE7" stroke="#166534" stroke-width="1.5"/>
+    <circle cx="197" cy="25" r="7" fill="#166534"/>
+    <text x="197" y="29" text-anchor="middle" font-size="12" font-weight="bold" fill="white">&#10003;</text>
+    <text x="210" y="30" font-size="15" font-weight="bold" fill="#166534">Trust</text>
+    <text x="194" y="57" font-size="12" fill="#475569">Quality &middot; Safety</text>
+    <text x="194" y="74" font-size="12" fill="#475569">Compliance</text>
+    <text x="260" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#166534">All 3 checks passed</text></g>
+    <path d="M 343 49 L 356 49" stroke="#94a3b8" stroke-width="2"/><path d="M 352 45 L 356 49 L 352 53" fill="none" stroke="#94a3b8" stroke-width="2"/>
+
+    <g><rect x="360" y="5" width="160" height="88" rx="10" fill="#DCFCE7" stroke="#166534" stroke-width="1.5"/>
+    <circle cx="377" cy="25" r="7" fill="#166534"/>
+    <text x="377" y="29" text-anchor="middle" font-size="12" font-weight="bold" fill="white">&#10003;</text>
+    <text x="390" y="30" font-size="15" font-weight="bold" fill="#166534">Value</text>
+    <text x="374" y="57" font-size="12" fill="#475569">Business outcome</text>
+    <text x="374" y="74" font-size="12" fill="#475569">Unit cost &middot; Net value</text>
+    <text x="440" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#166534">$0.0007/out &middot; +$0.0088 net</text></g>
+    <path d="M 523 49 L 536 49" stroke="#94a3b8" stroke-width="2"/><path d="M 532 45 L 536 49 L 532 53" fill="none" stroke="#94a3b8" stroke-width="2"/>
+
+    <g><rect x="540" y="5" width="160" height="88" rx="10" fill="#DCFCE7" stroke="#166534" stroke-width="1.5"/>
+    <circle cx="557" cy="25" r="7" fill="#166534"/>
+    <text x="557" y="29" text-anchor="middle" font-size="12" font-weight="bold" fill="white">&#10003;</text>
+    <text x="570" y="30" font-size="15" font-weight="bold" fill="#166534">Tokens</text>
+    <text x="554" y="57" font-size="12" fill="#475569">Budget &middot; Efficiency</text>
+    <text x="620" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#166534">28% eff &middot; 187 tok/out</text></g>
+    <path d="M 703 49 L 716 49" stroke="#94a3b8" stroke-width="2"/><path d="M 712 45 L 716 49 L 712 53" fill="none" stroke="#94a3b8" stroke-width="2"/>
+
+    <g><rect x="720" y="5" width="160" height="88" rx="10" fill="#DCFCE7" stroke="#166534" stroke-width="1.5"/>
+    <circle cx="737" cy="25" r="7" fill="#166534"/>
+    <text x="737" y="29" text-anchor="middle" font-size="12" font-weight="bold" fill="white">&#10003;</text>
+    <text x="750" y="30" font-size="15" font-weight="bold" fill="#166534">Waste</text>
+    <text x="734" y="57" font-size="12" fill="#475569">Review &middot; Retry</text>
+    <text x="800" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#166534">50% no-change &middot; 1,000 tok</text></g>
+    <path d="M 883 49 L 896 49" stroke="#94a3b8" stroke-width="2"/><path d="M 892 45 L 896 49 L 892 53" fill="none" stroke="#94a3b8" stroke-width="2"/>
+
+    <g><rect x="900" y="5" width="160" height="88" rx="10" fill="#DBEAFE" stroke="#1E40AF" stroke-width="2"/>
+    <text x="980" y="38" text-anchor="middle" font-size="14" font-weight="bold" fill="#1E40AF">&#128309; DECISION</text>
+    <text x="980" y="66" text-anchor="middle" font-size="16" font-weight="bold" fill="#1E40AF">MONITOR</text>
+    <text x="980" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#1E40AF">11/11 gates passed</text></g>
+</svg>
+</div>
+
+<div class="legend">
+    <div class="item"><span class="chip">Evidence</span>
+        <h3>Is there enough to judge?</h3>
+        <p>32 tickets meet the minimum sample size and every one carries a
+            verification result&mdash;31 passed. Sufficiency, not the pass
+            rate, is what this gate checks.</p></div>
+    <div class="item"><span class="chip">Trust</span>
+        <h3>Is the work sound?</h3>
+        <p>Quality, safety, and compliance assurance all report pass. These
+            gates guard against a cheaper process that quietly cuts corners.</p></div>
+    <div class="item"><span class="chip">Value</span>
+        <h3>Is it worth it?</h3>
+        <p>Unit cost is within contract and net savings clears the policy
+            minimum: $0.000748 per verified outcome, +$0.0088 net across the
+            batch.</p></div>
+    <div class="item"><span class="chip">Tokens</span>
+        <h3>Is spend under control?</h3>
+        <p>187 tokens per verified outcome, a 27.5% efficiency gain over
+            control&mdash;both within budget and above the improvement
+            target.</p></div>
+    <div class="item"><span class="chip">Waste</span>
+        <h3>Is spend attributable?</h3>
+        <p>Review and retry waste stay under policy limits: only 50% of
+            remaining review tokens are non-contributing, down from 84% in
+            control.</p></div>
+    <div class="item"><span class="chip">Decision</span>
+        <h3>What should happen next?</h3>
+        <p>All 11 gates passing routes to MONITOR: keep the optimized
+            process in production and keep watching, rather than an
+            unconditional SCALE.</p></div>
+</div>
+
+<footer><span>Fictional tickets &middot; exported from the live Streamlit dashboard</span>
+    <span>maf-outcome-economics</span></footer>
+</main>
+</body>
+</html>

@@ -20,6 +20,11 @@ dependencies = [
     "typer>=0.27.1",
 ]
 
+[project.optional-dependencies]
+dashboard = [
+    "streamlit>=1.38.0",
+]
+
 [project.scripts]
 maf-outcome-economics = "maf_outcome_economics.cli:app"
 

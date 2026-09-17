@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Old Way vs New Way</title>
+<style>
+:root{color-scheme:dark;--canvas:#101516;--panel:#182022;--alt:#1d282a;
+--line:#385055;--ink:#f2f6f4;--muted:#9eb0ae;--cyan:#44d7cf;
+--green:#7ae582;--amber:#ffca5c;--red:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--canvas);background-image:
+linear-gradient(rgba(68,215,207,.045) 1px,transparent 1px),
+linear-gradient(90deg,rgba(68,215,207,.045) 1px,transparent 1px);
+background-size:32px 32px;color:var(--ink);font-family:Bahnschrift,"Arial Narrow",sans-serif}
+main{width:1600px;min-height:1000px;padding:64px 82px 56px}
+header{text-align:center;border-bottom:2px solid var(--cyan);padding-bottom:26px;
+margin-bottom:34px}
+.eyebrow{color:var(--cyan);font:700 20px/1.2 "Cascadia Mono",Consolas,monospace;
+text-transform:uppercase}
+h1{margin:8px 0 6px;font-size:54px;line-height:1.05}
+.subtitle{margin:0 auto;color:var(--muted);font-size:23px;max-width:1000px}
+
+.split{display:grid;grid-template-columns:1fr 90px 1fr;align-items:stretch;gap:0}
+.side{border-radius:14px;padding:32px 34px;display:flex;flex-direction:column}
+.side.old{background:#241417;border:2px solid var(--red)}
+.side.new{background:#0f2420;border:2px solid var(--green)}
+.side .kicker{font:700 18px/1 "Cascadia Mono",Consolas,monospace;text-transform:uppercase}
+.side.old .kicker{color:var(--red)}
+.side.new .kicker{color:var(--green)}
+.side h2{margin:10px 0 22px;font-size:32px}
+.side.old h2{color:var(--red)}
+.side.new h2{color:var(--green)}
+.metric-list{display:flex;flex-direction:column;gap:16px;flex:1}
+.metric-list .row{display:flex;justify-content:space-between;align-items:baseline;
+border-bottom:1px solid var(--line);padding-bottom:14px}
+.metric-list .row .label{color:var(--muted);font-size:19px;max-width:280px}
+.metric-list .row .value{font:700 26px "Cascadia Mono",Consolas,monospace;text-align:right}
+.side.old .value{color:var(--red)}
+.side.new .value{color:var(--green)}
+.side .caption{margin-top:20px;font-size:18px;color:var(--muted);line-height:1.4}
+
+.vs{display:flex;align-items:center;justify-content:center}
+.vs .badge{width:76px;height:76px;border-radius:50%;background:var(--panel);
+border:2px solid var(--cyan);display:flex;align-items:center;justify-content:center;
+color:var(--cyan);font:700 24px "Cascadia Mono",Consolas,monospace}
+
+.verdict{margin-top:30px;background:var(--panel);border:2px solid var(--cyan);
+border-radius:12px;padding:24px 30px;display:flex;justify-content:space-between;
+align-items:center}
+.verdict .text{font-size:23px;max-width:1000px}
+.verdict .text strong{color:var(--cyan)}
+.verdict .action{font:700 40px "Cascadia Mono",Consolas,monospace;color:var(--cyan)}
+
+footer{display:flex;justify-content:space-between;margin-top:26px;color:var(--muted);
+font:17px/1.3 "Cascadia Mono",Consolas,monospace;border-top:1px solid var(--line);
+padding-top:16px}
+</style>
+</head>
+<body>
+<main>
+<header>
+    <div class="eyebrow">Microsoft Agent Framework &middot; Outcome Economics</div>
+    <h1>Activity Metrics Lie. Verified Outcomes Don't.</h1>
+    <p class="subtitle">The same 32-ticket run, read two ways: what AI
+        activity dashboards report today, versus what a deterministic,
+        outcome-adjusted governance engine reports instead.</p>
+</header>
+
+<div class="split">
+    <div class="side old">
+        <div class="kicker">The old way</div>
+        <h2>AI Activity Metrics</h2>
+        <div class="metric-list">
+            <div class="row"><span class="label">Tickets processed</span>
+                <span class="value">32</span></div>
+            <div class="row"><span class="label">Reviews run</span>
+                <span class="value">32</span></div>
+            <div class="row"><span class="label">Tokens consumed</span>
+                <span class="value">8,000</span></div>
+            <div class="row"><span class="label">Model calls completed</span>
+                <span class="value">100%</span></div>
+        </div>
+        <p class="caption">Every number here answers &ldquo;did the agent
+            run?&rdquo;&mdash;not &ldquo;was the work right, and was the
+            spend worth it?&rdquo;</p>
+    </div>
+    <div class="vs"><div class="badge">VS</div></div>
+    <div class="side new">
+        <div class="kicker">The new way</div>
+        <h2>Verified Outcome Economics</h2>
+        <div class="metric-list">
+            <div class="row"><span class="label">Outcomes verified</span>
+                <span class="value">31 / 32</span></div>
+            <div class="row"><span class="label">Cost per verified outcome</span>
+                <span class="value">$0.000748</span></div>
+            <div class="row"><span class="label">Token efficiency gain</span>
+                <span class="value">+27.5%</span></div>
+            <div class="row"><span class="label">Non-contributing reviews removed</span>
+                <span class="value">22, keeping 4/4 useful</span></div>
+        </div>
+        <p class="caption">Every number here is computed from a deterministic
+            hidden-label verifier and normalized DTOs&mdash;never from the
+            agent grading itself.</p>
+    </div>
+</div>
+
+<div class="verdict">
+    <div class="text"><strong>11 / 11 governance gates passed</strong> on
+        evidence, trust, value, tokens, and waste&mdash;so the decision below
+        is earned, not asserted.</div>
+    <div class="action">MONITOR</div>
+</div>
+
+<footer><span>Fictional tickets &middot; deterministic hidden-label verification</span>
+    <span>maf-outcome-economics</span></footer>
+</main>
+</body>
+</html>

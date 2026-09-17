@@ -11,6 +11,10 @@ from maf_outcome_economics.agents import (
     TriageAgent,
 )
 from maf_outcome_economics.agents.prompts import render_triage_prompt
+from maf_outcome_economics.agents.rehearsal import (
+    RehearsalReviewAgent,
+    RehearsalTriageAgent,
+)
 from maf_outcome_economics.domain import Ticket
 
 
@@ -25,6 +29,62 @@ def ticket() -> Ticket:
         gold_priority="P1",
         gold_resolver_group="SECRET-GOLD-GROUP",
     )
+
+
+@pytest.mark.asyncio
+async def test_given_correctable_rehearsal_ticket_when_reviewed_then_gold_labels_are_restored(
+) -> None:
+    # Arrange
+    ticket = Ticket(
+        id="TKT-022",
+        subject="Duplicate payment authorization",
+        description="A fictional payment issue.",
+        gold_category="Payment",
+        gold_priority="P1",
+        gold_resolver_group="Payments Reliability",
+    )
+    triage_agent = RehearsalTriageAgent()
+    review_agent = RehearsalReviewAgent()
+
+    # Act
+    triage = await triage_agent.run(ticket, "run-test")
+    review = await review_agent.run(ticket, triage)
+
+    # Assert
+    assert (
+        review.approved,
+        review.corrected_category,
+        review.corrected_priority,
+        review.corrected_resolver_group,
+    ) == (False, "Payment", "P1", "Payments Reliability")
+
+
+@pytest.mark.asyncio
+async def test_given_harmful_rehearsal_ticket_when_reviewed_then_mismatch_is_introduced(
+) -> None:
+    # Arrange
+    ticket = Ticket(
+        id="TKT-015",
+        subject="Security key enrollment rejected",
+        description="A fictional security key issue.",
+        gold_category="Identity and access",
+        gold_priority="P2",
+        gold_resolver_group="Identity Operations",
+    )
+    triage_agent = RehearsalTriageAgent()
+    review_agent = RehearsalReviewAgent()
+
+    # Act
+    triage = await triage_agent.run(ticket, "run-test")
+    review = await review_agent.run(ticket, triage)
+
+    # Assert
+    assert (
+        review.approved,
+        review.corrected_category,
+        review.corrected_priority,
+        review.corrected_resolver_group,
+    ) == (False, "Service request", "P3", "Service Desk")
 
 
 def test_given_profiles_when_rendering_triage_then_optimized_is_shorter_and_labels_are_hidden(

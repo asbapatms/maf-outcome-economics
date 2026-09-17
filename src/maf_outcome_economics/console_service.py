@@ -21,6 +21,7 @@ from maf_outcome_economics.governance import GovernanceEngine
 from maf_outcome_economics.persistence import (
     OutcomeRepository,
 )
+from maf_outcome_economics.pricing import build_pricing_index, resolve_pricing
 from maf_outcome_economics.scenarios.ticket import (
     TicketEconomicsAnalyzer,
     TicketGenericAnalysis,
@@ -249,12 +250,17 @@ class ConsoleService:
         usage: list[dict[str, Any]], pricing: list[PricingRecord]
     ) -> None:
         """Raise actionable guidance for captured provider/model pairs without pricing."""
-        priced_models = {(record.provider, record.model) for record in pricing}
+        priced_models = build_pricing_index(pricing)
         unpriced_models = sorted(
             {
                 (str(row["provider"]), str(row["model"]))
                 for row in usage
-                if (str(row["provider"]), str(row["model"])) not in priced_models
+                if resolve_pricing(
+                    priced_models,
+                    provider=str(row["provider"]),
+                    model=str(row["model"]),
+                )
+                is None
             }
         )
         if unpriced_models:

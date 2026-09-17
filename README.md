@@ -36,8 +36,11 @@ maf-outcome-economics/
 |   |-- telemetry/     # MAF and OpenTelemetry capture
 |   |-- persistence/   # SQLite repositories
 |   |-- economics/     # Compatibility economics projections
+|   |-- dashboard/     # Optional live Streamlit governance dashboard
 |   `-- reporting/     # Human-readable reports
 |-- tests/             # Unit and integration tests
+|-- docs/
+|   `-- governance-gates/  # One reference page per governance gate
 |-- .env.example       # Secret-free configuration template
 |-- pyproject.toml     # Project and tool configuration
 `-- uv.lock            # Locked dependency graph
@@ -290,6 +293,29 @@ Because live model costs are estimated until reconciled billing evidence is
 available, an otherwise passing live run returns `MONITOR` rather than
 `SCALE`. See [DEMO.md](DEMO.md) for the two-minute sequence.
 
+## Live Governance Dashboard
+
+A Streamlit dashboard renders the same evidence as the console CLI and HTML
+reports directly from the configured SQLite database, so a reviewer can watch
+governance evidence update without waiting for a static report:
+
+```powershell
+uv sync --extra dashboard
+uv run maf-outcome-economics dashboard
+uv run maf-outcome-economics dashboard --database data\dashboard-sample.db
+```
+
+The dashboard is an optional dependency (`streamlit`) and adds no new
+decision logic; it re-runs the same `TicketEconomicsAnalyzer` pipeline used
+elsewhere and displays the governance decision banner, gate-by-gate results,
+optimization recommendations, control-versus-treatment process and token
+comparisons, review-token attribution, and recent runs. Use `--database` for
+a specific SQLite file, use `--port` to run on a non-default port, and leave
+the demo or `run` commands active in another
+terminal with the sidebar's "Refresh now" button or auto-refresh enabled to
+watch a live run land. No prompt, response, or ticket content is ever
+displayed.
+
 ## Application Insights Traces
 
 SQLite trace persistence is always enabled. To send the same safe spans to an
@@ -502,6 +528,10 @@ share, and retry-token share. It evaluates five possible actions:
 * `OPTIMIZE` when evidence and assurance pass but economics fail
 * `STOP` when a quality, safety, compliance, or business-outcome gate fails
 * `INSUFFICIENT_EVIDENCE` when required evidence or gate assessments are unknown
+
+See [docs/governance-gates/](docs/governance-gates/README.md) for a
+dedicated page per gate covering exactly what it measures, its pass, fail,
+and unknown conditions, and the optimization recommendation it can trigger.
 
 Evidence and hard-stop gates take precedence over economics. This ordering
 prevents favorable cost or token estimates from overriding missing or failed

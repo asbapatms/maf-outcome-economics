@@ -859,6 +859,64 @@ def invoice_demo() -> None:
     _print_invoice_scenario(asyncio.run(InvoiceProcessingScenario().run()))
 
 
+@app.command("dashboard")
+def dashboard(
+    port: Annotated[
+        int, typer.Option(help="Local port for the Streamlit server.")
+    ] = 8501,
+    database: Annotated[
+        Path | None,
+        typer.Option(
+            help=(
+                "SQLite database to display. Defaults to MAF_DATABASE_PATH "
+                "or data/outcomes.db."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Launch the live governance dashboard over the configured SQLite database."""
+    import os
+    import shutil
+    import subprocess
+    import sys
+
+    if shutil.which("streamlit") is None and not _module_available("streamlit"):
+        console.print(
+            "Streamlit is not installed. Install the dashboard extra with:\n"
+            "  uv sync --extra dashboard"
+        )
+        raise typer.Exit(code=1)
+
+    app_path = Path(__file__).with_name("dashboard") / "app.py"
+    effective_database = database or Settings.from_env().database_path
+    env = os.environ.copy()
+    env["MAF_DATABASE_PATH"] = str(effective_database)
+    console.print(
+        f"Starting the live dashboard on http://localhost:{port} "
+        f"using {effective_database} (press Ctrl+C to stop)."
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            str(app_path),
+            "--server.port",
+            str(port),
+        ],
+        check=False,
+        env=env,
+    )
+
+
+def _module_available(name: str) -> bool:
+    """Return whether an importable module is available without importing it."""
+    from importlib.util import find_spec
+
+    return find_spec(name) is not None
+
+
 @app.command("telemetry-smoke-test")
 def telemetry_smoke_test() -> None:
     """Export a custom span and verify its SQLite record."""

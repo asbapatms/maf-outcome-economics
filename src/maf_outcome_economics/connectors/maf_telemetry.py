@@ -15,6 +15,7 @@ from maf_outcome_economics.core import (
     TokenPurpose,
 )
 from maf_outcome_economics.domain import PricingRecord
+from maf_outcome_economics.pricing import build_pricing_index, resolve_pricing
 
 if TYPE_CHECKING:
     from maf_outcome_economics.persistence.sqlite_repository import OutcomeRepository
@@ -120,9 +121,7 @@ class MAFTelemetryCostConnector:
         if len(currencies) != 1:
             raise ValueError("All pricing records must use one currency")
         self._repository = repository
-        self._pricing = {
-            (record.provider, record.model): record for record in pricing
-        }
+        self._pricing = build_pricing_index(pricing)
         self._variant_ids = variant_ids
 
     async def load_costs(self, period: ReportingPeriod) -> list[CostEntry]:
@@ -161,7 +160,7 @@ class MAFTelemetryCostConnector:
     ) -> CostEntry:
         provider = str(row["provider"])
         model = str(row["model"])
-        pricing = self._pricing.get((provider, model))
+        pricing = resolve_pricing(self._pricing, provider=provider, model=model)
         if pricing is None:
             raise ValueError(
                 f"Missing pricing for provider={provider!r}, model={model!r}"

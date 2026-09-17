@@ -13,6 +13,7 @@ from maf_outcome_economics.domain import (
     PricingRecord,
     RoutingVerificationResult,
 )
+from maf_outcome_economics.pricing import build_pricing_index, resolve_pricing
 from maf_outcome_economics.verification import verify_outcome
 
 MILLION_TOKENS = Decimal(1_000_000)
@@ -44,7 +45,7 @@ class OutcomeEconomicsCalculator:
         currencies = {record.currency for record in pricing}
         if len(currencies) != 1:
             raise ValueError("All pricing records must use one currency")
-        self._pricing = {(record.provider, record.model): record for record in pricing}
+        self._pricing = build_pricing_index(pricing)
         self._currency = pricing[0].currency
 
     def calculate(
@@ -140,7 +141,11 @@ class OutcomeEconomicsCalculator:
         )
 
     def _cost(self, call: BillableModelCall) -> Decimal:
-        pricing = self._pricing.get((call.provider, call.model))
+        pricing = resolve_pricing(
+            self._pricing,
+            provider=call.provider,
+            model=call.model,
+        )
         if pricing is None:
             raise ValueError(
                 f"Missing pricing for provider={call.provider!r}, model={call.model!r}"

@@ -78,48 +78,56 @@ margin-top:24px;color:var(--muted);font:17px/1.3 "Cascadia Mono",Consolas,monosp
     <section class="terminal">
       <div class="terminal-head"><span>RUN EVIDENCE · 3 TICKETS PER VARIANT</span>
         <span>SQLite + OpenTelemetry</span></div>
-      <div class="terminal-line"><span class="prompt">baseline 1/3</span> · TKT-001 · <span class="accepted-no">accepted=no</span> · <span class="review-invoked">review=invoked</span> · tokens=763 in/231 out · <span class="trace">trace=c98e…3c9c</span></div>
-<div class="terminal-line"><span class="prompt">baseline 2/3</span> · TKT-002 · <span class="accepted-no">accepted=no</span> · <span class="review-invoked">review=invoked</span> · tokens=766 in/229 out · <span class="trace">trace=ec32…6e7a</span></div>
-<div class="terminal-line"><span class="prompt">baseline 3/3</span> · TKT-003 · <span class="accepted-no">accepted=no</span> · <span class="review-invoked">review=invoked</span> · tokens=762 in/219 out · <span class="trace">trace=e4d7…f802</span></div>
-<div class="terminal-line"><span class="prompt">optimized 1/3</span> · TKT-001 · <span class="accepted-no">accepted=no</span> · <span class="review-invoked">review=invoked</span> · tokens=614 in/221 out · <span class="trace">trace=a158…e3b8</span></div>
-<div class="terminal-line"><span class="prompt">optimized 2/3</span> · TKT-002 · <span class="accepted-no">accepted=no</span> · <span class="review-skipped">review=skipped</span> · tokens=246 in/108 out · <span class="trace">trace=f287…1e03</span></div>
-<div class="terminal-line"><span class="prompt">optimized 3/3</span> · TKT-003 · <span class="accepted-no">accepted=no</span> · <span class="review-invoked">review=invoked</span> · tokens=612 in/230 out · <span class="trace">trace=f3cb…a804</span></div>
+      <div class="terminal-line"><span class="prompt">baseline 1/3</span> · TKT-001 · <span class="accepted-no">accepted=no</span> · <span class="review-invoked">review=invoked</span> · tokens=776 in/232 out · <span class="trace">trace=ad45…0c5c</span></div>
+<div class="terminal-line"><span class="prompt">baseline 2/3</span> · TKT-002 · <span class="accepted-no">accepted=no</span> · <span class="review-invoked">review=invoked</span> · tokens=763 in/235 out · <span class="trace">trace=0279…26ef</span></div>
+<div class="terminal-line"><span class="prompt">baseline 3/3</span> · TKT-003 · <span class="accepted-no">accepted=no</span> · <span class="review-invoked">review=invoked</span> · tokens=770 in/248 out · <span class="trace">trace=8d00…92dc</span></div>
+<div class="terminal-line"><span class="prompt">optimized 1/3</span> · TKT-001 · <span class="accepted-no">accepted=no</span> · <span class="review-invoked">review=invoked</span> · tokens=605 in/223 out · <span class="trace">trace=4609…a71f</span></div>
+<div class="terminal-line"><span class="prompt">optimized 2/3</span> · TKT-002 · <span class="accepted-no">accepted=no</span> · <span class="review-skipped">review=skipped</span> · tokens=245 in/108 out · <span class="trace">trace=2721…798c</span></div>
+<div class="terminal-line"><span class="prompt">optimized 3/3</span> · TKT-003 · <span class="accepted-no">accepted=no</span> · <span class="review-skipped">review=skipped</span> · tokens=247 in/116 out · <span class="trace">trace=f0a3…6a68</span></div>
     </section>
     <section class="results">
       <table>
         <caption>Quality and Outcome Economics</caption>
         <thead><tr><th>Persisted metric</th><th>Baseline</th><th>Optimized</th></tr></thead>
         <tbody>
-                    <tr><td>Runs</td><td>53</td><td class="optimized-value">28</td></tr>
-<tr><td>Acceptance rate</td><td>39.2%</td><td class="optimized-value">71.4%</td></tr>
-<tr><td>Average quality</td><td>52.3%</td><td class="optimized-value">83.3%</td></tr>
-<tr><td>Critical recall</td><td>50.0%</td><td class="optimized-value">100.0%</td></tr>
-<tr><td>Total tokens</td><td>36,089</td><td class="optimized-value">9,409</td></tr>
-<tr><td>Estimated model cost</td><td>$0.070519</td><td class="optimized-value">$0.024764</td></tr>
-<tr><td>Cost / accepted</td><td>$0.003526</td><td class="optimized-value">$0.001238</td></tr>
+                    <tr><td>Runs</td><td>85</td><td class="optimized-value">59</td></tr>
+<tr><td>Acceptance rate</td><td>26.8%</td><td class="optimized-value">33.9%</td></tr>
+<tr><td>Average quality</td><td>40.7%</td><td class="optimized-value">56.5%</td></tr>
+<tr><td>Critical recall</td><td>22.2%</td><td class="optimized-value">73.3%</td></tr>
+<tr><td>Total tokens</td><td>67,255</td><td class="optimized-value">28,700</td></tr>
+<tr><td>Estimated model cost</td><td>$0.121318</td><td class="optimized-value">$0.059452</td></tr>
+<tr><td>Cost / accepted</td><td>$0.005514</td><td class="optimized-value">$0.002973</td></tr>
         </tbody>
       </table>
       <div>
         <h2 class="section-title">Measured Impact</h2>
         <div class="impact">
-          <div class="metric"><span class="value">-73.9%</span><span class="label">token usage</span></div>
-          <div class="metric"><span class="value">-64.9%</span><span class="label">cost per accepted outcome</span></div>
-          <div class="metric"><span class="value">+31.0%</span><span class="label">average quality</span></div>
-          <div class="metric"><span class="value">100.0%</span><span class="label">critical recall</span></div>
+          <div class="metric"><span class="value">-57.3%</span><span class="label">token usage</span></div>
+          <div class="metric"><span class="value">-46.1%</span><span class="label">cost per accepted outcome</span></div>
+          <div class="metric"><span class="value">+15.8%</span><span class="label">average quality</span></div>
+          <div class="metric"><span class="value">73.3%</span><span class="label">critical recall</span></div>
         </div>
       </div>
+    </section>
+    <section class="results tokenomics">
+      <table>
+        <caption>Verified Outcome Tokenomics</caption>
+        <thead><tr><th>Persisted metric</th><th>Baseline</th><th>Optimized</th></tr></thead>
+        <tbody><tr><td>Verified outcomes</td><td>22</td><td class="optimized-value">20</td></tr><tr><td>Tokens / verified outcome</td><td>3,057.05</td><td class="optimized-value">1,435.00</td></tr><tr><td>Review tokens</td><td>2,000</td><td class="optimized-value">600</td></tr><tr><td>Non-contributing review tokens</td><td>2,000</td><td class="optimized-value">600</td></tr><tr><td>Token efficiency improvement</td><td>-</td><td class="optimized-value">53.1%</td></tr></tbody>
+      </table>
     </section>
     <section class="governance red">
       <div class="decision">STOP</div>
       <div>
         <h2>Governance decision</h2>
-        <p>Control and treatment evidence is sufficient. quality assurance is fail. safety assurance is pass. compliance assurance is pass. business_outcome assurance is fail. Unit cost is within the contract maximum. Net value meets the policy minimum.</p>
+        <p>Control and treatment evidence is sufficient. quality assurance is fail. safety assurance is fail. compliance assurance is pass. business_outcome assurance is fail. Unit cost is within the contract maximum. Net value meets the policy minimum. Observed 1435 against target 300. Observed 0.5305925210021559735335662777 against target 0.1. Observed 0.02090592334494773519163763066 against target 0.4. Observed 0.3839024390243902439024390244 against target 0.1.</p>
         <p class="recommendation">Stop rollout and remediate failed outcome or assurance gates.</p>
-        <div class="audit">audit codes: evidence:pass, quality:fail, safety:pass, compliance:pass, business_outcome:fail, unit_cost:pass, net_value:pass</div>
+        <p class="recommendation">Reduce response limits or prompt context before scaling. Correct output validation failures before allowing another retry.</p>
+        <div class="audit">audit codes: evidence:pass, quality:fail, safety:fail, compliance:pass, business_outcome:fail, unit_cost:pass, net_value:pass, token_budget:fail, token_efficiency:pass, review_waste:pass, retry_waste:fail</div>
       </div>
     </section>
     <footer><span>Actual MAF OpenTelemetry spans · deterministic hidden-label verification</span>
-      <span>Captured 2026-08-20 13:17 UTC</span></footer>
+      <span>Captured 2026-09-15 17:46 UTC</span></footer>
   </main>
 </body>
 </html>

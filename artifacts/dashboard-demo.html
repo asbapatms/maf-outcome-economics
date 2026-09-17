@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OutcomeMeter Demo Report</title>
+  <style>
+:root{color-scheme:dark;--canvas:#101516;--panel:#182022;--alt:#1d282a;
+--line:#385055;--ink:#f2f6f4;--muted:#9eb0ae;--cyan:#44d7cf;
+--green:#7ae582;--amber:#ffca5c;--red:#ff6b6b}*{box-sizing:border-box}
+body{margin:0;background-color:var(--canvas);background-image:
+linear-gradient(rgba(68,215,207,.045) 1px,transparent 1px),
+linear-gradient(90deg,rgba(68,215,207,.045) 1px,transparent 1px);
+background-size:32px 32px;color:var(--ink);font-family:Bahnschrift,"Arial Narrow",sans-serif}
+main{width:1600px;min-height:1200px;padding:72px 82px 64px}header{display:grid;
+grid-template-columns:1fr auto;align-items:end;gap:40px;border-bottom:2px solid var(--cyan);
+padding-bottom:28px;margin-bottom:34px}.eyebrow{color:var(--cyan);font:700 20px/1.2
+"Cascadia Mono",Consolas,monospace;text-transform:uppercase}h1{margin:8px 0 10px;
+font-size:62px;line-height:1}.subtitle{margin:0;color:var(--muted);font-size:25px}
+.mode{border:1px solid;padding:13px 18px;font:700 20px/1 "Cascadia Mono",Consolas,monospace;
+text-transform:uppercase}.mode.live{color:var(--green)}.mode.fake{color:var(--amber)}
+.question{background:var(--alt);border-left:7px solid var(--cyan);padding:24px 28px;
+margin-bottom:28px;font-size:29px}.question strong{color:var(--cyan)}
+.experiment{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:28px}
+.experiment article{background:var(--panel);border:1px solid var(--line);padding:24px 26px}
+.experiment article.optimized{border-color:var(--green)}
+h2,.section-title{margin:0 0 10px;font-size:26px;color:var(--cyan)}.optimized h2{color:var(--green)}
+.experiment p{margin:0;color:var(--muted);font-size:21px;line-height:1.45}
+.terminal{background:#0b0f10;
+border:1px solid var(--line);padding:24px 26px;margin-bottom:28px;font:19px/1.55
+"Cascadia Mono",Consolas,monospace}.terminal-head{display:flex;justify-content:space-between;
+color:var(--muted);border-bottom:1px solid #293538;padding-bottom:13px;margin-bottom:14px}
+.terminal-line{white-space:nowrap}.prompt{color:var(--cyan)}.accepted-yes{color:var(--green)}
+.accepted-no{color:var(--red)}.review-skipped{color:var(--amber)}.trace{color:#7fb8ff}
+.muted{color:var(--muted)}
+.results{display:grid;grid-template-columns:1.18fr .82fr;gap:24px;margin-bottom:28px}
+table{width:100%;
+border-collapse:collapse;background:var(--panel);font:20px/1.3 "Cascadia Mono",Consolas,monospace}
+caption{text-align:left;color:var(--cyan);font:700 26px/1.2 Bahnschrift,sans-serif;
+padding-bottom:12px}
+th,td{padding:13px 16px;border-bottom:1px solid var(--line);text-align:right}th:first-child,
+td:first-child{text-align:left}th{color:var(--muted);font-weight:400}
+.optimized-value{color:var(--green)}
+.impact{display:grid;grid-template-columns:1fr 1fr;gap:14px}.metric{background:var(--alt);
+border-top:4px solid var(--green);padding:18px;min-height:118px}.metric .value{color:var(--green);
+font:700 38px/1 "Cascadia Mono",Consolas,monospace}.metric .label{display:block;margin-top:10px;
+color:var(--muted);font-size:18px}.governance{display:grid;grid-template-columns:240px 1fr;
+gap:28px;align-items:center;border:2px solid;padding:26px 30px}
+.governance.green{background:#142219;border-color:var(--green)}
+.governance.amber{background:#282216;border-color:var(--amber)}
+.governance.red{background:#28191a;border-color:var(--red)}
+.decision{font:700 54px/1 "Cascadia Mono",Consolas,monospace;text-align:center}
+.green .decision,.green h2{color:var(--green)}.amber .decision,.amber h2{color:var(--amber)}
+.red .decision,.red h2{color:var(--red)}.governance p{margin:0;font-size:22px;line-height:1.4}
+.recommendation{margin-top:8px!important;color:var(--muted)}.audit{margin-top:8px;color:var(--muted);
+font:17px/1.3 "Cascadia Mono",Consolas,monospace}footer{display:flex;justify-content:space-between;
+margin-top:24px;color:var(--muted);font:17px/1.3 "Cascadia Mono",Consolas,monospace}
+</style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <div class="eyebrow">Microsoft Agent Framework · Outcome Economics</div>
+        <h1>OutcomeMeter</h1>
+        <p class="subtitle">Illustrative rehearsal telemetry, measured per verified outcome</p>
+      </div>
+      <div class="mode fake">● FAKE mode</div>
+    </header>
+    <section class="question"><strong>Experiment:</strong> Can risk-based review
+      preserve routing quality while reducing token cost?</section>
+    <section class="experiment">
+      <article><h2>Baseline</h2><p>Triage and review every ticket. Maximum
+        oversight, with coordination tokens on every run.</p></article>
+      <article class="optimized"><h2>Optimized</h2><p>Triage every ticket.
+        Review only low-confidence, sensitive, P1, or critical results.</p></article>
+    </section>
+    <section class="terminal">
+      <div class="terminal-head"><span>RUN EVIDENCE · 32 TICKETS PER VARIANT</span>
+        <span>SQLite + OpenTelemetry</span></div>
+      <div class="terminal-line"><span class="prompt">baseline 1/32</span> · TKT-001 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=3594…28dd</span></div>
+<div class="terminal-line"><span class="prompt">baseline 2/32</span> · TKT-002 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=bb83…087a</span></div>
+<div class="terminal-line"><span class="prompt">baseline 3/32</span> · TKT-003 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=f05a…7f9d</span></div>
+<div class="terminal-line"><span class="prompt">baseline 4/32</span> · TKT-004 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=a11b…c396</span></div>
+<div class="terminal-line"><span class="prompt">baseline 5/32</span> · TKT-005 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=09b2…cc73</span></div>
+<div class="terminal-line"><span class="prompt">baseline 6/32</span> · TKT-006 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=e47e…7de1</span></div>
+<div class="terminal-line"><span class="prompt">baseline 7/32</span> · TKT-007 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=7c99…21aa</span></div>
+<div class="terminal-line"><span class="prompt">baseline 8/32</span> · TKT-008 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=7fa1…261d</span></div>
+<div class="terminal-line"><span class="prompt">baseline 9/32</span> · TKT-009 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=8a21…b070</span></div>
+<div class="terminal-line"><span class="prompt">baseline 10/32</span> · TKT-010 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=e194…e429</span></div>
+<div class="terminal-line"><span class="prompt">baseline 11/32</span> · TKT-011 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=7e31…9a01</span></div>
+<div class="terminal-line"><span class="prompt">baseline 12/32</span> · TKT-012 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=308d…0d69</span></div>
+<div class="terminal-line"><span class="prompt">baseline 13/32</span> · TKT-013 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=e1be…2e8f</span></div>
+<div class="terminal-line"><span class="prompt">baseline 14/32</span> · TKT-014 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=b4cc…850b</span></div>
+<div class="terminal-line"><span class="prompt">baseline 15/32</span> · TKT-015 · <span class="accepted-no">accepted=no</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=856a…6116</span></div>
+<div class="terminal-line"><span class="prompt">baseline 16/32</span> · TKT-016 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=60ac…7b06</span></div>
+<div class="terminal-line"><span class="prompt">baseline 17/32</span> · TKT-017 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=aed2…1612</span></div>
+<div class="terminal-line"><span class="prompt">baseline 18/32</span> · TKT-018 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=3b75…e4b7</span></div>
+<div class="terminal-line"><span class="prompt">baseline 19/32</span> · TKT-019 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=cea5…dcb9</span></div>
+<div class="terminal-line"><span class="prompt">baseline 20/32</span> · TKT-020 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=f483…58b5</span></div>
+<div class="terminal-line"><span class="prompt">baseline 21/32</span> · TKT-021 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=b45c…e2ad</span></div>
+<div class="terminal-line"><span class="prompt">baseline 22/32</span> · TKT-022 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=b1d2…1526</span></div>
+<div class="terminal-line"><span class="prompt">baseline 23/32</span> · TKT-023 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=0a67…428a</span></div>
+<div class="terminal-line"><span class="prompt">baseline 24/32</span> · TKT-024 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=cc98…aa5d</span></div>
+<div class="terminal-line"><span class="prompt">baseline 25/32</span> · TKT-025 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=a5de…2121</span></div>
+<div class="terminal-line"><span class="prompt">baseline 26/32</span> · TKT-026 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=a5aa…e34c</span></div>
+<div class="terminal-line"><span class="prompt">baseline 27/32</span> · TKT-027 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=51ab…c53f</span></div>
+<div class="terminal-line"><span class="prompt">baseline 28/32</span> · TKT-028 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=1fba…01be</span></div>
+<div class="terminal-line"><span class="prompt">baseline 29/32</span> · TKT-029 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=b40a…1fdd</span></div>
+<div class="terminal-line"><span class="prompt">baseline 30/32</span> · TKT-030 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=c1c2…4226</span></div>
+<div class="terminal-line"><span class="prompt">baseline 31/32</span> · TKT-031 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=fc99…05e4</span></div>
+<div class="terminal-line"><span class="prompt">baseline 32/32</span> · TKT-032 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=0903…df30</span></div>
+<div class="terminal-line"><span class="prompt">optimized 1/32</span> · TKT-001 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=a317…f507</span></div>
+<div class="terminal-line"><span class="prompt">optimized 2/32</span> · TKT-002 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=1581…70e8</span></div>
+<div class="terminal-line"><span class="prompt">optimized 3/32</span> · TKT-003 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=5ae7…21f8</span></div>
+<div class="terminal-line"><span class="prompt">optimized 4/32</span> · TKT-004 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=31a4…bb9b</span></div>
+<div class="terminal-line"><span class="prompt">optimized 5/32</span> · TKT-005 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=52e6…e8d1</span></div>
+<div class="terminal-line"><span class="prompt">optimized 6/32</span> · TKT-006 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=b6c2…c3ef</span></div>
+<div class="terminal-line"><span class="prompt">optimized 7/32</span> · TKT-007 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=3749…295f</span></div>
+<div class="terminal-line"><span class="prompt">optimized 8/32</span> · TKT-008 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=59a6…fbe9</span></div>
+<div class="terminal-line"><span class="prompt">optimized 9/32</span> · TKT-009 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=db57…40fd</span></div>
+<div class="terminal-line"><span class="prompt">optimized 10/32</span> · TKT-010 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=f01a…2d08</span></div>
+<div class="terminal-line"><span class="prompt">optimized 11/32</span> · TKT-011 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=569f…ae13</span></div>
+<div class="terminal-line"><span class="prompt">optimized 12/32</span> · TKT-012 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=b3e1…751f</span></div>
+<div class="terminal-line"><span class="prompt">optimized 13/32</span> · TKT-013 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=a448…b4d6</span></div>
+<div class="terminal-line"><span class="prompt">optimized 14/32</span> · TKT-014 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=36a7…ac52</span></div>
+<div class="terminal-line"><span class="prompt">optimized 15/32</span> · TKT-015 · <span class="accepted-no">accepted=no</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=8df4…f21c</span></div>
+<div class="terminal-line"><span class="prompt">optimized 16/32</span> · TKT-016 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=00cb…feb0</span></div>
+<div class="terminal-line"><span class="prompt">optimized 17/32</span> · TKT-017 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=e779…f7de</span></div>
+<div class="terminal-line"><span class="prompt">optimized 18/32</span> · TKT-018 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=ce91…34f9</span></div>
+<div class="terminal-line"><span class="prompt">optimized 19/32</span> · TKT-019 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=7cbf…7291</span></div>
+<div class="terminal-line"><span class="prompt">optimized 20/32</span> · TKT-020 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=2fba…1a38</span></div>
+<div class="terminal-line"><span class="prompt">optimized 21/32</span> · TKT-021 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=deca…c78f</span></div>
+<div class="terminal-line"><span class="prompt">optimized 22/32</span> · TKT-022 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=9eb6…8ed9</span></div>
+<div class="terminal-line"><span class="prompt">optimized 23/32</span> · TKT-023 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=b305…8155</span></div>
+<div class="terminal-line"><span class="prompt">optimized 24/32</span> · TKT-024 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=a44c…89c9</span></div>
+<div class="terminal-line"><span class="prompt">optimized 25/32</span> · TKT-025 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=ba55…269f</span></div>
+<div class="terminal-line"><span class="prompt">optimized 26/32</span> · TKT-026 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=e1bd…95c2</span></div>
+<div class="terminal-line"><span class="prompt">optimized 27/32</span> · TKT-027 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=b308…8511</span></div>
+<div class="terminal-line"><span class="prompt">optimized 28/32</span> · TKT-028 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=e1fb…249e</span></div>
+<div class="terminal-line"><span class="prompt">optimized 29/32</span> · TKT-029 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=9270…369c</span></div>
+<div class="terminal-line"><span class="prompt">optimized 30/32</span> · TKT-030 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=12db…156e</span></div>
+<div class="terminal-line"><span class="prompt">optimized 31/32</span> · TKT-031 · <span class="accepted-yes">accepted=yes</span> · <span class="review-invoked">review=invoked</span> · tokens=200 in/50 out · <span class="trace">trace=1312…6fc5</span></div>
+<div class="terminal-line"><span class="prompt">optimized 32/32</span> · TKT-032 · <span class="accepted-yes">accepted=yes</span> · <span class="review-skipped">review=skipped</span> · tokens=120 in/30 out · <span class="trace">trace=5b63…3760</span></div>
+    </section>
+    <section class="results">
+      <table>
+        <caption>Quality and Outcome Economics</caption>
+        <thead><tr><th>Persisted metric</th><th>Baseline</th><th>Optimized</th></tr></thead>
+        <tbody>
+                    <tr><td>Runs</td><td>32</td><td class="optimized-value">32</td></tr>
+<tr><td>Acceptance rate</td><td>96.9%</td><td class="optimized-value">96.9%</td></tr>
+<tr><td>Average quality</td><td>96.9%</td><td class="optimized-value">96.9%</td></tr>
+<tr><td>Critical recall</td><td>100.0%</td><td class="optimized-value">100.0%</td></tr>
+<tr><td>Total tokens</td><td>8,000</td><td class="optimized-value">5,800</td></tr>
+<tr><td>Estimated model cost</td><td>$0.032000</td><td class="optimized-value">$0.023200</td></tr>
+<tr><td>Cost / accepted</td><td>$0.001032</td><td class="optimized-value">$0.000748</td></tr>
+        </tbody>
+      </table>
+      <div>
+        <h2 class="section-title">Measured Impact</h2>
+        <div class="impact">
+          <div class="metric"><span class="value">-27.5%</span><span class="label">token usage</span></div>
+          <div class="metric"><span class="value">-27.5%</span><span class="label">cost per accepted outcome</span></div>
+          <div class="metric"><span class="value">+0.0%</span><span class="label">average quality</span></div>
+          <div class="metric"><span class="value">100.0%</span><span class="label">critical recall</span></div>
+        </div>
+      </div>
+    </section>
+    
+    <section class="governance green">
+      <div class="decision">SCALE</div>
+      <div>
+        <h2>Governance decision</h2>
+        <p>Quality, safety, and unit-cost gates passed.</p>
+        <p class="recommendation">Scale the workflow while monitoring quality, safety, and unit cost.</p>
+        
+        <div class="audit">audit codes: thresholds_met</div>
+      </div>
+    </section>
+    <footer><span>Illustrative rehearsal telemetry · deterministic hidden-label verification</span>
+      <span>Captured 2026-09-16 12:31 UTC</span></footer>
+  </main>
+</body>
+</html>

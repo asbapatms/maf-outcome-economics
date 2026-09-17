@@ -14,7 +14,7 @@ from maf_outcome_economics.console_service import (
     ConsoleService,
     ConsoleSetupError,
 )
-from maf_outcome_economics.domain import TriageResult, WorkflowVariant
+from maf_outcome_economics.domain import PricingRecord, TriageResult, WorkflowVariant
 from maf_outcome_economics.persistence import OutcomeRepository, seed_fictional_tickets
 
 
@@ -26,6 +26,7 @@ def test_given_root_help_when_invoked_then_every_command_is_registered() -> None
         "decide",
         "demo",
         "demo-scenarios",
+        "dashboard",
         "health",
         "init-db",
         "invoice-demo",
@@ -43,6 +44,15 @@ def test_given_root_help_when_invoked_then_every_command_is_registered() -> None
     # Assert
     assert result.exit_code == 0
     assert all(command in result.stdout for command in expected_commands)
+
+
+def test_dashboard_help_exposes_database_option() -> None:
+    # Act
+    result = CliRunner().invoke(app, ["dashboard", "--help"])
+
+    # Assert
+    assert result.exit_code == 0
+    assert "--database" in result.stdout
 
 
 def test_given_local_environment_when_health_runs_then_dependencies_are_reported() -> None:
@@ -149,7 +159,7 @@ def test_seed_inserts_fictional_tickets_and_configurable_estimated_pricing(
     pricing = repository.list_pricing()
     assert result.exit_code == 0
     assert "estimated" in result.stdout
-    assert len(repository.list_tickets()) == 20
+    assert len(repository.list_tickets()) == 32
     assert pricing[0].input_cost_per_million_tokens == Decimal("1.25")
     assert pricing[0].output_cost_per_million_tokens == Decimal("5.0")
     assert pricing[0].illustrative is True
@@ -361,6 +371,46 @@ def test_report_explains_how_to_seed_captured_live_model_pricing(
     assert "gpt-5.4-mini-2026-03-17" in message
     assert "--input-cost-per-million <INPUT_PRICE>" in message
     assert "--output-cost-per-million <OUTPUT_PRICE>" in message
+
+
+def test_report_accepts_azure_openai_dated_response_model_when_base_is_priced(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database_path = tmp_path / "cli.db"
+    monkeypatch.setenv("MAF_DATABASE_PATH", str(database_path))
+    runner = CliRunner()
+    assert runner.invoke(app, ["seed"]).exit_code == 0
+    assert runner.invoke(
+        app,
+        ["run", "--variant", "baseline", "--limit", "1", "--provider", "fake"],
+    ).exit_code == 0
+    repository = OutcomeRepository(database_path)
+    repository.save_pricing(
+        PricingRecord(
+            id="pricing:azure.ai.openai:gpt-5.4-mini",
+            provider="azure.ai.openai",
+            model="gpt-5.4-mini",
+            input_cost_per_million_tokens=Decimal("0.75"),
+            output_cost_per_million_tokens=Decimal("4.50"),
+        )
+    )
+    run_id = str(repository.list_runs(WorkflowVariant.BASELINE)[0]["id"])
+    repository.save_rehearsal_model_call(
+        usage_id="captured-live-call",
+        run_id=run_id,
+        provider="azure.ai.openai",
+        model="gpt-5.4-mini-2026-03-17",
+        agent_id="triage",
+        agent_name="TriageAgent",
+        input_tokens=100,
+        output_tokens=20,
+    )
+
+    report = ConsoleService(Settings(database_path=database_path)).report(
+        WorkflowVariant.BASELINE
+    )
+
+    assert report.economics.total_input_tokens >= 100
 
 
 def test_demo_runs_both_variants_with_trace_tokens_and_governance(

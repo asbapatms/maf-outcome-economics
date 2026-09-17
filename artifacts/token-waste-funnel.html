@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Waste Attribution</title>
+<style>
+:root{color-scheme:dark;--canvas:#101516;--panel:#182022;--alt:#1d282a;
+--line:#385055;--ink:#f2f6f4;--muted:#9eb0ae;--cyan:#44d7cf;
+--green:#7ae582;--amber:#ffca5c;--red:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--canvas);background-image:
+linear-gradient(rgba(68,215,207,.045) 1px,transparent 1px),
+linear-gradient(90deg,rgba(68,215,207,.045) 1px,transparent 1px);
+background-size:32px 32px;color:var(--ink);font-family:Bahnschrift,"Arial Narrow",sans-serif}
+main{width:1600px;min-height:1000px;padding:64px 82px 56px}
+header{display:grid;grid-template-columns:1fr auto;align-items:end;gap:40px;
+border-bottom:2px solid var(--cyan);padding-bottom:24px;margin-bottom:36px}
+.eyebrow{color:var(--cyan);font:700 20px/1.2 "Cascadia Mono",Consolas,monospace;
+text-transform:uppercase}
+h1{margin:8px 0 6px;font-size:50px;line-height:1.05}
+.subtitle{margin:0;color:var(--muted);font-size:22px;max-width:1120px}
+.mode{border:1px solid var(--line);padding:12px 18px;font:700 18px/1
+"Cascadia Mono",Consolas,monospace;text-transform:uppercase;color:var(--muted)}
+
+.legend{display:flex;gap:28px;margin-bottom:26px;font:16px/1
+"Cascadia Mono",Consolas,monospace}
+.legend span{display:inline-flex;align-items:center;gap:9px;color:var(--muted)}
+.swatch{width:16px;height:16px;border-radius:3px;display:inline-block}
+.sw-primary{background:var(--cyan)}.sw-useful{background:var(--green)}
+.sw-harmful{background:var(--red)}.sw-noncontrib{background:var(--amber)}
+
+.lane{margin-bottom:34px}
+.lane-head{display:flex;justify-content:space-between;align-items:baseline;
+margin-bottom:10px}
+.lane-head h2{margin:0;font-size:24px}
+.lane-head .total{color:var(--muted);font:19px "Cascadia Mono",Consolas,monospace}
+.track{background:#0b0f10;border:1px solid var(--line);border-radius:8px;
+height:78px;display:flex;overflow:hidden;position:relative}
+.seg{display:flex;flex-direction:column;align-items:center;justify-content:center;
+height:100%;font:700 15px/1.2 "Cascadia Mono",Consolas,monospace;color:#0b0f10;
+border-right:2px solid var(--canvas);text-align:center}
+.seg:last-child{border-right:none}
+.seg.primary{background:var(--cyan)}
+.seg.useful{background:var(--green)}
+.seg.harmful{background:var(--red)}
+.seg.noncontrib{background:var(--amber)}
+.seg small{display:block;font-weight:400;font-size:12px}
+.removed{flex:1;border:2px dashed var(--line);border-left:none;
+display:flex;align-items:center;justify-content:center;color:var(--muted);
+font:700 15px "Cascadia Mono",Consolas,monospace;background:repeating-linear-gradient(
+135deg,#141a1b,#141a1b 10px,#182022 10px,#182022 20px)}
+
+.callout{margin-top:6px;background:var(--alt);border-left:6px solid var(--green);
+padding:18px 24px;font-size:19px;line-height:1.45}
+.callout strong{color:var(--green)}
+.result-strip{margin-top:26px;background:var(--panel);border:2px solid var(--cyan);
+border-radius:10px;padding:22px 28px;display:grid;grid-template-columns:repeat(4,1fr);
+gap:18px}
+.result-strip .metric .value{color:var(--cyan);font:700 32px/1 "Cascadia Mono",Consolas,monospace}
+.result-strip .metric .label{display:block;margin-top:8px;color:var(--muted);font-size:16px}
+
+footer{display:flex;justify-content:space-between;margin-top:26px;color:var(--muted);
+font:17px/1.3 "Cascadia Mono",Consolas,monospace;border-top:1px solid var(--line);
+padding-top:16px}
+</style>
+</head>
+<body>
+<main>
+<header>
+    <div>
+        <div class="eyebrow">Token Waste Attribution &middot; Review Spend</div>
+        <h1>Where Review Tokens Actually Went</h1>
+        <p class="subtitle">Every review token is attributed to an outcome:
+            it either changed a wrong answer (useful), changed a right answer
+            into a wrong one (harmful), or confirmed a decision that was
+            already correct (non-contributing). Track length is proportional
+            to tokens spent.</p>
+    </div>
+    <div class="mode">8,000 tokens = full track</div>
+</header>
+
+<div class="legend">
+    <span><span class="swatch sw-primary"></span>Primary work</span>
+    <span><span class="swatch sw-useful"></span>Useful correction</span>
+    <span><span class="swatch sw-harmful"></span>Harmful correction</span>
+    <span><span class="swatch sw-noncontrib"></span>Non-contributing review</span>
+</div>
+
+<div class="lane">
+    <div class="lane-head"><h2>Control &middot; review every ticket</h2>
+        <span class="total">8,000 tokens total</span></div>
+    <div class="track">
+        <div class="seg primary" style="flex:0 0 60%">Primary work<small>4,800 tok</small></div>
+        <div class="seg useful" style="flex:0 0 5%"></div>
+        <div class="seg harmful" style="flex:0 0 1.25%"></div>
+        <div class="seg noncontrib" style="flex:0 0 33.75%">Non-contributing review<small>2,700 tok &middot; 27 reviews</small></div>
+    </div>
+</div>
+
+<div class="lane">
+    <div class="lane-head"><h2>Treatment &middot; confidence-gated review</h2>
+        <span class="total">5,800 tokens total</span></div>
+    <div class="track">
+        <div class="seg primary" style="flex:0 0 60%">Primary work<small>4,800 tok</small></div>
+        <div class="seg useful" style="flex:0 0 5%"></div>
+        <div class="seg harmful" style="flex:0 0 1.25%"></div>
+        <div class="seg noncontrib" style="flex:0 0 6.25%">500 tok<small>5 reviews</small></div>
+        <div class="removed" style="flex:0 0 27.5%">2,200 tok avoided &middot; 22 reviews skipped</div>
+    </div>
+</div>
+
+<div class="callout"><strong>Same 4 useful corrections. Same 1 harmful
+    correction.</strong> The gating policy removes only the reviews that were
+    never going to change the outcome&mdash;confirmed by the deterministic
+    verifier, not assumed from confidence scores alone.</div>
+
+<div class="result-strip">
+    <div class="metric"><span class="value">84% &rarr; 50%</span>
+        <span class="label">non-contributing share of review spend</span></div>
+    <div class="metric"><span class="value">27 &rarr; 5</span>
+        <span class="label">non-contributing reviews</span></div>
+    <div class="metric"><span class="value">4 / 4</span>
+        <span class="label">useful corrections retained</span></div>
+    <div class="metric"><span class="value">27.5%</span>
+        <span class="label">total token efficiency gain</span></div>
+</div>
+
+<footer><span>Fictional tickets &middot; token purpose attributed from OpenTelemetry spans</span>
+    <span>maf-outcome-economics</span></footer>
+</main>
+</body>
+</html>

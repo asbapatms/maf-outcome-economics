@@ -132,6 +132,33 @@ def test_given_unique_chat_calls_when_calculated_then_reports_all_economics() ->
     assert result.coordination_tax == Decimal("0.056")
 
 
+def test_given_azure_openai_dated_model_when_base_is_priced_then_calculates_cost() -> None:
+    # Arrange
+    calculator = OutcomeEconomicsCalculator(
+        [
+            _pricing(
+                provider="azure.ai.openai",
+                model="gpt-5.4-mini",
+            )
+        ]
+    )
+
+    # Act
+    result = calculator.calculate(
+        [
+            _call(
+                "span-1",
+                provider="azure.ai.openai",
+                model="gpt-5.4-mini-2026-03-17",
+            )
+        ],
+        [_verification(accepted=True)],
+    )
+
+    # Assert
+    assert result.estimated_model_cost == Decimal("0.280")
+
+
 def test_given_duplicate_chat_and_agent_span_when_calculated_then_bills_chat_once() -> None:
     # Arrange
     calculator = OutcomeEconomicsCalculator([_pricing()])

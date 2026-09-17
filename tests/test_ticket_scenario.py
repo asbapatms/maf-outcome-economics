@@ -17,8 +17,8 @@ def test_given_standard_dataset_when_scenario_seeds_then_contracts_and_tickets_e
     count = scenario.seed(repository)
 
     # Assert
-    assert count == 20
-    assert len(repository.list_tickets()) == 20
+    assert count == 32
+    assert len(repository.list_tickets()) == 32
     assert repository.get_outcome_contract(
         scenario.contract_id(WorkflowVariant.BASELINE)
     ) is not None

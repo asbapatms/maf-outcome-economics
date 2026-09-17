@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scale / Optimize / Stop Decision Matrix</title>
+<style>
+:root{color-scheme:dark;--canvas:#101516;--panel:#182022;--alt:#1d282a;
+--line:#385055;--ink:#f2f6f4;--muted:#9eb0ae;--cyan:#44d7cf;
+--green:#7ae582;--amber:#ffca5c;--red:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background-color:var(--canvas);background-image:
+linear-gradient(rgba(68,215,207,.045) 1px,transparent 1px),
+linear-gradient(90deg,rgba(68,215,207,.045) 1px,transparent 1px);
+background-size:32px 32px;color:var(--ink);font-family:Bahnschrift,"Arial Narrow",sans-serif}
+main{width:1600px;min-height:980px;padding:64px 82px 56px}
+header{display:grid;grid-template-columns:1fr auto;align-items:end;gap:40px;
+border-bottom:2px solid var(--cyan);padding-bottom:24px;margin-bottom:30px}
+.eyebrow{color:var(--cyan);font:700 20px/1.2 "Cascadia Mono",Consolas,monospace;
+text-transform:uppercase}
+h1{margin:8px 0 6px;font-size:50px;line-height:1.05}
+.subtitle{margin:0;color:var(--muted);font-size:22px;max-width:1100px}
+.mode{border:1px solid var(--line);padding:12px 18px;font:700 18px/1
+"Cascadia Mono",Consolas,monospace;text-transform:uppercase;color:var(--muted)}
+
+table{width:100%;border-collapse:collapse;background:var(--panel);
+border-radius:10px;overflow:hidden}
+thead th{background:var(--alt);color:var(--muted);font:700 17px
+"Cascadia Mono",Consolas,monospace;text-transform:uppercase;text-align:left;
+padding:16px 20px;border-bottom:2px solid var(--line)}
+thead th.col{text-align:center}
+tbody td{padding:16px 20px;border-bottom:1px solid var(--line);
+font:20px/1.3 "Cascadia Mono",Consolas,monospace;text-align:center}
+tbody td:first-child{text-align:left;color:var(--muted);font-family:Bahnschrift,sans-serif;
+font-size:18px}
+tbody tr:last-child td{border-bottom:none}
+.decision-row td{font-size:30px;font-weight:700}
+.decision-row .scale{color:var(--green)}
+.decision-row .optimize{color:var(--amber)}
+.decision-row .stop{color:var(--red)}
+th.scale{color:var(--green)}
+th.optimize{color:var(--amber)}
+th.stop{color:var(--red)}
+.reason-row td{text-align:left;font:16px/1.4 Bahnschrift,sans-serif;color:var(--muted);
+padding-top:14px}
+.reason-row td:first-child{grid-column:1}
+
+.callout{margin-top:26px;background:var(--alt);border-left:6px solid var(--cyan);
+padding:18px 24px;font-size:19px;line-height:1.45}
+.callout strong{color:var(--cyan)}
+
+footer{display:flex;justify-content:space-between;margin-top:26px;color:var(--muted);
+font:17px/1.3 "Cascadia Mono",Consolas,monospace;border-top:1px solid var(--line);
+padding-top:16px}
+</style>
+</head>
+<body>
+<main>
+<header>
+    <div>
+        <div class="eyebrow">Microsoft Agent Framework &middot; Outcome Economics</div>
+        <h1>One Engine. Three Verdicts. Zero Hard-Coding.</h1>
+        <p class="subtitle">Three isolated fictional datasets are run through
+            the identical <code>GenericGovernanceEngine</code>. Only the
+            input evidence changes&mdash;the action always follows from it.</p>
+    </div>
+    <div class="mode">&#9679; Rehearsal mode</div>
+</header>
+
+<table>
+<thead><tr>
+    <th>Gate</th>
+    <th class="col scale">Scale dataset</th>
+    <th class="col optimize">Optimize dataset</th>
+    <th class="col stop">Stop dataset</th>
+</tr></thead>
+<tbody>
+    <tr><td>Quality</td><td>100.0%</td><td>100.0%</td><td>0.0%</td></tr>
+    <tr><td>Critical recall</td><td>100.0%</td><td>100.0%</td><td>0.0%</td></tr>
+    <tr><td>Cost / accepted outcome</td><td>$0.000600</td><td>$0.000600</td><td>n/a</td></tr>
+    <tr><td>Approved budget</td><td>$0.050000</td><td>$0.000100</td><td>$0.050000</td></tr>
+    <tr class="decision-row">
+        <td>Decision</td>
+        <td class="scale">SCALE</td>
+        <td class="optimize">OPTIMIZE</td>
+        <td class="stop">STOP</td>
+    </tr>
+</tbody>
+</table>
+
+<div class="callout"><strong>Same code path, different verdicts:</strong>
+    Scale passes every gate outright. Optimize passes quality and safety but
+    breaches unit cost&mdash;work is sound, spend is not. Stop fails
+    verification entirely&mdash;no outcomes cleared the deterministic
+    check, so cost is never even evaluated.</div>
+
+<footer><span>Fictional tickets &middot; deterministic hidden-label verification</span>
+    <span>maf-outcome-economics</span></footer>
+</main>
+</body>
+</html>

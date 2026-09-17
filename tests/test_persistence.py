@@ -95,11 +95,11 @@ def test_given_legacy_runs_table_when_initialized_then_business_task_column_is_a
 def test_seed_inserts_twenty_fictional_labeled_tickets_idempotently(tmp_path) -> None:
     repository = OutcomeRepository(tmp_path / "outcomes.db")
 
-    assert seed_fictional_tickets(repository) == 20
-    assert seed_fictional_tickets(repository) == 20
+    assert seed_fictional_tickets(repository) == 32
+    assert seed_fictional_tickets(repository) == 32
 
     tickets = repository.list_tickets()
-    assert len(tickets) == 20
+    assert len(tickets) == 32
     assert all(ticket.gold_category for ticket in tickets)
     assert all(ticket.gold_priority.startswith("P") for ticket in tickets)
     assert all(ticket.gold_resolver_group for ticket in tickets)
